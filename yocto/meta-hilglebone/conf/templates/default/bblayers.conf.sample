@@ -12,6 +12,7 @@
 #   ├── poky/                   <-- COREBASE
 #   ├── meta-arm/
 #   ├── meta-ti/
+#   ├── meta-openembedded/
 #   └── HILglebone/
 #       └── yocto/meta-hilglebone/
 #
@@ -32,5 +33,7 @@ BBLAYERS ?= " \
   ##COREBASE##/../meta-arm/meta-arm-toolchain \
   ##COREBASE##/../meta-ti/meta-ti-bsp \
   ##COREBASE##/../meta-ti/meta-beagle \
+  ##COREBASE##/../meta-openembedded/meta-oe \
+  ##COREBASE##/../meta-openembedded/meta-python \
   ##COREBASE##/../HILglebone/yocto/meta-hilglebone \
   "
