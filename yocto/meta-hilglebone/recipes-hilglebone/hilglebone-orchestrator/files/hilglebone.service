@@ -1,0 +1,34 @@
+[Unit]
+Description=HILglebone HIL orchestrator
+Documentation=https://github.com/kibshh/HILglebone
+# Wait specifically for the UART device node used to talk to the STM32.
+# systemd synthesizes a .device unit for every node udev creates, so we can
+# block on exactly the one we need instead of on the whole udev queue
+# (systemd-udev-settle.service is an anti-pattern and significantly slows
+# boot on embedded boards).
+#
+# We intentionally do NOT use BindsTo=dev-ttyS1.device: if the STM32 is
+# unplugged at runtime the orchestrator stays up and reports the disconnect
+# from Python, instead of being killed by systemd.
+#
+# IMPORTANT: dev-ttyS1.device must match the UART enabled in
+# recipes-bsp/device-tree/files/hilglebone-uart-overlay.dts. If you move the
+# overlay to a different UART, change the device unit here to the matching
+# node (UART<N> -> /dev/ttyS<N> on modern kernels with the 8250_omap driver).
+After=dev-ttyS1.device multi-user.target
+Wants=dev-ttyS1.device
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/hilglebone
+# -u flushes stdout/stderr line-by-line so journalctl shows logs in real time.
+ExecStart=/usr/bin/python3 -u -m bbb.orchestrator
+Restart=on-failure
+RestartSec=2
+# Run as root for now -- the orchestrator needs raw access to /dev/ttyO* and
+# possibly GPIO. Tighten this down (dedicated user, supplementary groups)
+# once the device permissions are sorted.
+User=root
+
+[Install]
+WantedBy=multi-user.target

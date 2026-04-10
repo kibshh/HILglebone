@@ -143,9 +143,10 @@ IMAGE_FSTYPES ?= "wic.xz wic.bmap"
 
 # HILglebone dev/prod master switch
 #
-# Single toggle that gates every development-only convenience in this file:
-#   - debug-tweaks in EXTRA_IMAGE_FEATURES (blank root password, etc.)
-#   - openssh-sftp-server and htop in IMAGE_INSTALL
+# Single toggle that gates every development-only convenience in the
+# HILglebone image recipe (recipes-core/images/hilglebone-image.bb):
+#   - debug-tweaks in IMAGE_FEATURES (blank root password)
+#   - ssh server, htop, and other dev tools in IMAGE_INSTALL
 #
 # Set to "0" for a production build, or override from the command line:
 #   HILGLEBONE_DEV=0 bitbake hilglebone-image
@@ -153,51 +154,16 @@ IMAGE_FSTYPES ?= "wic.xz wic.bmap"
 # SET TO "0" BEFORE ANY REAL DEPLOYMENT.
 HILGLEBONE_DEV ?= "1"
 
+# NOTE: rootfs contents (IMAGE_INSTALL, IMAGE_FEATURES, EXTRA_IMAGE_FEATURES)
+# are intentionally NOT set here. They live where they belong:
+#   - Runtime deps of the orchestrator       -> RDEPENDS in
+#       recipes-hilglebone/hilglebone-orchestrator/hilglebone-orchestrator.bb
+#   - Image-wide content (dev tools, ssh)    -> IMAGE_INSTALL / IMAGE_FEATURES in
+#       recipes-core/images/hilglebone-image.bb
 #
-# Extra image configuration defaults
-#
-# The EXTRA_IMAGE_FEATURES variable allows extra packages to be added to the
-# generated images. Some of these options are added to certain image types
-# automatically. The variable can contain the following options:
-#  "dbg-pkgs"       - add -dbg packages for all installed packages
-#                     (adds symbol information for debugging/profiling)
-#  "src-pkgs"       - add -src packages for all installed packages
-#                     (adds source code for debugging)
-#  "dev-pkgs"       - add -dev packages for all installed packages
-#                     (useful if you want to develop against libs in the image)
-#  "ptest-pkgs"     - add -ptest packages for all ptest-enabled packages
-#                     (useful if you want to run the package test suites)
-#  "tools-sdk"      - add development tools (gcc, make, pkgconfig etc.)
-#  "tools-debug"    - add debugging tools (gdb, strace)
-#  "eclipse-debug"  - add Eclipse remote debugging support
-#  "tools-profile"  - add profiling tools (oprofile, lttng, valgrind)
-#  "tools-testapps" - add useful testing tools (ts_print, aplay, arecord etc.)
-#  "debug-tweaks"   - make an image suitable for development
-#                     e.g. ssh root access has a blank password
-# There are other application targets that can be used here too, see
-# meta/classes-recipe/image.bbclass and
-# meta/classes-recipe/core-image.bbclass for more details.
-
-# debug-tweaks is enabled only when HILGLEBONE_DEV == "1".
-EXTRA_IMAGE_FEATURES ?= "${@'debug-tweaks' if d.getVar('HILGLEBONE_DEV') == '1' else ''}"
-
-#
-# Extra packages to install into the image
-#
-# Packages added here are appended to the rootfs manifest of any image recipe.
-# The leading space after the quote is required.
-#
-# Runtime dependencies (always shipped):
-#   python3              -- orchestrator runtime
-#   python3-pyserial     -- UART communication with STM32
-#   python3-pyyaml       -- scenario parsing
-IMAGE_INSTALL:append = " python3 python3-pyserial python3-pyyaml"
-
-# Development-only extras, gated by HILGLEBONE_DEV (defined above).
-#
-#   openssh-sftp-server  -- file transfer for pushing code onto the board
-#   htop                 -- interactive process inspection
-IMAGE_INSTALL:append = "${@' openssh-sftp-server htop' if d.getVar('HILGLEBONE_DEV') == '1' else ''}"
+# Doing it this way means a stray `bitbake core-image-minimal` from the same
+# build directory will not accidentally drag HILglebone-specific packages into
+# an unrelated image.
 
 #
 # Build parallelism

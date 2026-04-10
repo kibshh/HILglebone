@@ -1,0 +1,55 @@
+/*
+ * HILglebone UART1 device-tree overlay for BeagleBone Black.
+ *
+ * Enables UART1 on the P9 expansion header so the orchestrator can talk to
+ * the STM32 emulator. Pin assignment:
+ *
+ *     P9.24  ->  UART1_TXD  (mode 0)
+ *     P9.26  ->  UART1_RXD  (mode 0)
+ *
+ * After this overlay is applied, the device shows up as /dev/ttyS1 on modern
+ * kernels (8250_omap driver; older omap-serial kernels would name it
+ * /dev/ttyO1). The hilglebone.service systemd unit waits on
+ * dev-ttyS1.device, so the two files must agree if you ever move to a
+ * different UART.
+ *
+ * Offset reference: am335x-bone-common.dtsi / AM335x TRM control module.
+ *   P9.24 uart1_txd -> offset 0x184
+ *   P9.26 uart1_rxd -> offset 0x180
+ *
+ * Pinmux config bytes (am33xx.h encoding):
+ *   PIN_OUTPUT_PULLUP      = 0x10  (bit4 pullup)
+ *   PIN_INPUT_PULLUP       = 0x30  (bit5 input_en | bit4 pullup)
+ *   MUX_MODE0              = 0x00
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+    compatible = "ti,beaglebone", "ti,beaglebone-black";
+
+    /* Pin multiplexer settings -- mode 0 is the UART function on UART1 pins.
+     * PIN_INPUT_PULLUP for RX (idle-high line), PIN_OUTPUT_PULLUP for TX. */
+    fragment@0 {
+        target = <&am33xx_pinmux>;
+        __overlay__ {
+            hilglebone_uart1_pins: pinmux_hilglebone_uart1_pins {
+                pinctrl-single,pins = <
+                    0x184 0x10  /* P9.24 (uart1_txd)  OUTPUT_PULLUP | MODE0 */
+                    0x180 0x30  /* P9.26 (uart1_rxd)  INPUT_PULLUP  | MODE0 */
+                >;
+            };
+        };
+    };
+
+    /* Activate the UART1 controller and bind it to the pinmux above. */
+    fragment@1 {
+        target = <&uart1>;
+        __overlay__ {
+            status = "okay";
+            pinctrl-names = "default";
+            pinctrl-0 = <&hilglebone_uart1_pins>;
+        };
+    };
+};
