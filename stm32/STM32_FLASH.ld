@@ -18,9 +18,14 @@ ENTRY(Reset_Handler)
 /* Highest address of the user mode stack (top of RAM) */
 _estack = ORIGIN(RAM) + LENGTH(RAM);
 
-/* Minimum heap and stack sizes — adjust as needed */
+/* Minimum heap and stack sizes.
+ * Under FreeRTOS, _Min_Stack_Size is the MSP (main stack pointer) used
+ * only by ISRs and the startup code. Task stacks are allocated from the
+ * FreeRTOS heap (configTOTAL_HEAP_SIZE in FreeRTOSConfig.h).
+ * _Min_Heap_Size is the C-library heap (malloc), kept small since
+ * FreeRTOS manages its own memory pool. */
 _Min_Heap_Size  = 0x200;
-_Min_Stack_Size = 0x400;
+_Min_Stack_Size = 0x800;
 
 SECTIONS
 {

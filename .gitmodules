@@ -4,3 +4,6 @@
 [submodule "stm32/vendor/cmsis_core"]
 	path = stm32/vendor/cmsis_core
 	url = https://github.com/STMicroelectronics/cmsis_core.git
+[submodule "stm32/vendor/freertos_kernel"]
+	path = stm32/vendor/freertos_kernel
+	url = https://github.com/FreeRTOS/FreeRTOS-Kernel.git

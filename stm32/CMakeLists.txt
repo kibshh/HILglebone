@@ -22,6 +22,20 @@ set(CMSIS_DEVICE_DIR  ${CMAKE_CURRENT_SOURCE_DIR}/vendor/cmsis_device_${STM32_FA
 set(CMSIS_STARTUP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/cmsis_device_${STM32_FAMILY_LOWER}/Source/Templates/gcc)
 set(CMSIS_SYSTEM_DIR  ${CMAKE_CURRENT_SOURCE_DIR}/vendor/cmsis_device_${STM32_FAMILY_LOWER}/Source/Templates)
 
+# ─── FreeRTOS Kernel ───
+set(FREERTOS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/freertos_kernel)
+set(FREERTOS_PORT_DIR ${FREERTOS_DIR}/portable/GCC/ARM_CM4F)
+
+set(FREERTOS_SOURCES
+    ${FREERTOS_DIR}/tasks.c
+    ${FREERTOS_DIR}/queue.c
+    ${FREERTOS_DIR}/list.c
+    ${FREERTOS_DIR}/timers.c
+    ${FREERTOS_DIR}/event_groups.c
+    ${FREERTOS_DIR}/portable/MemMang/heap_4.c
+    ${FREERTOS_PORT_DIR}/port.c
+)
+
 # ─── Sources ───
 file(GLOB_RECURSE APP_SOURCES src/*.c)
 
@@ -62,12 +76,15 @@ add_executable(${PROJECT_NAME}
     ${APP_SOURCES}
     ${STARTUP_FILE}
     ${SYSTEM_FILE}
+    ${FREERTOS_SOURCES}
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMSIS_CORE_DIR}
     ${CMSIS_DEVICE_DIR}
+    ${FREERTOS_DIR}/include
+    ${FREERTOS_PORT_DIR}
 )
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
