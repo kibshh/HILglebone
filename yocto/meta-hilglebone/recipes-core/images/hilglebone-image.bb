@@ -46,6 +46,12 @@ IMAGE_INSTALL:append = "${@' openssh-sftp-server htop' if d.getVar('HILGLEBONE_D
 #   tools-debug         -- gdb, strace, ltrace
 IMAGE_FEATURES:append = "${@' debug-tweaks ssh-server-openssh tools-debug' if d.getVar('HILGLEBONE_DEV') == '1' else ''}"
 
+# Place our UART overlay on the FAT boot partition so U-Boot can load it
+# via the FDTOVERLAYS directive in extlinux.conf. The overlay recipe's
+# do_deploy task puts the .dtbo into DEPLOY_DIR_IMAGE; this line tells wic
+# to copy it onto the partition.
+IMAGE_BOOT_FILES:append = " hilglebone-uart-overlay.dtbo"
+
 # Reasonable rootfs ceiling. BeagleBone Black eMMC is 4 GiB, SD cards are
 # usually 8+ GiB. 512 MiB leaves plenty of headroom for logs and updates.
 IMAGE_ROOTFS_EXTRA_SPACE = "524288"

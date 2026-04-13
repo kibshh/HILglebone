@@ -35,5 +35,15 @@ do_install() {
 
 FILES:${PN} = "/boot/overlays/hilglebone-uart-overlay.dtbo"
 
+# Additionally deploy the .dtbo to DEPLOY_DIR_IMAGE so the wic tool can
+# place it on the FAT boot partition (where U-Boot reads it from).
+inherit deploy
+
+do_deploy() {
+    install -d ${DEPLOYDIR}
+    install -m 0644 ${B}/hilglebone-uart-overlay.dtbo ${DEPLOYDIR}/
+}
+addtask deploy after do_compile before do_build
+
 # Don't try to strip a binary blob.
 INHIBIT_PACKAGE_STRIP = "1"
