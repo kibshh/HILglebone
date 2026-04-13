@@ -189,9 +189,9 @@ affecting UART timing or causing random resets under load.
 BeagleBone Black                     STM32F401RE (Nucleo)
 +--------------+                     +------------------+
 |              |                     |                  |
-| P9.24 (TX) -|------ wire -------->|- PA10 (USART2 RX)|
+| P9.24 (TX) -|------ wire -------->|- PA10 (USART1 RX)|
 |              |                     |                  |
-| P9.26 (RX) -|<----- wire ---------|-- PA2 (USART2 TX)|
+| P9.26 (RX) -|<----- wire ---------|-- PA9 (USART1 TX)|
 |              |                     |                  |
 | P9.1  (GND)-|------ wire ---------|-- GND            |
 |              |                     |                  |

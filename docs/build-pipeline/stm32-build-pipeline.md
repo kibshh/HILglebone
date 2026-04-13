@@ -128,6 +128,29 @@ Currently pre-configured chips:
 | STM32F446RE | Cortex-M4 | 512K | 128K |
 | STM32F407VG | Cortex-M4 | 1024K | 128K |
 
+### Clock source -- `USE_HSE`
+
+The PLL clock source is selected at build time via the `USE_HSE` CMake option:
+
+```
+cmake -B build ... -DUSE_HSE=ON     # default: use external HSE (8 MHz crystal/bypass)
+cmake -B build ... -DUSE_HSE=OFF    # fall back to internal HSI (16 MHz RC)
+```
+
+| Option | PLL source | PLLM | VCO input | Accuracy |
+|--------|-----------|------|-----------|----------|
+| `USE_HSE=ON` (default) | HSE 8 MHz | 4 | 2 MHz | ~20 ppm (crystal) |
+| `USE_HSE=OFF` | HSI 16 MHz | 8 | 2 MHz | ~1% (RC oscillator) |
+
+Both paths produce the same 84 MHz SYSCLK (VCO input × 168 / 4). HSE is the
+default because crystal-accurate timing is required for precise timer/PWM
+frequencies and SPI/I2C clock rates when simulating sensors. HSI is available
+as a fallback for boards without an external oscillator.
+
+When `USE_HSE=ON`, CMake adds `-DUSE_HSE` to the compile definitions, and
+`SystemClock_Config()` in `main.c` uses `#ifdef USE_HSE` to select the
+appropriate clock initialization path.
+
 ---
 
 ## Stage 2: Compilation
@@ -200,7 +223,8 @@ plus project-wide settings:
 The target module exports `STM32F401xE` (or equivalent) as a preprocessor define via
 `target_compile_definitions`. This is consumed by the CMSIS header `stm32f4xx.h` to
 select the correct register definitions and peripheral memory map for the specific chip
-variant.
+variant. Additionally, `USE_HSE` is conditionally defined when the HSE clock source
+is selected (see [Clock source](#clock-source----use_hse) above).
 
 ### Include paths
 
@@ -297,7 +321,7 @@ flowchart TB
 
 It also defines the full interrupt vector table (`.isr_vector` section) with default
 weak handlers that point to an infinite loop. Specific handlers can be overriden
-by defining a function with the matching name (e.g., `USART2_IRQHandler`).
+by defining a function with the matching name (e.g., `USART1_IRQHandler`).
 
 ---
 
@@ -390,6 +414,9 @@ cmake -B build -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake
 
 # Configure for a different chip
 cmake -B build -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake -DSTM32_MCU=STM32F411RE
+
+# Configure with internal HSI oscillator (no external crystal)
+cmake -B build -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake -DUSE_HSE=OFF
 
 # Build
 cmake --build build
