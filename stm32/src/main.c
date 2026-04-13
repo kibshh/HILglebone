@@ -31,7 +31,7 @@ int main(void)
     /* Reset all peripherals, init flash interface */
     SystemInit();
 
-    /* Configure system clock: HSI -> PLL -> 84 MHz */
+    /* Configure system clock: PLL -> 84 MHz */
     SystemClock_Config();
 
     /* PA5 as push-pull output (heartbeat LED) */
@@ -39,7 +39,7 @@ int main(void)
     GPIOA->MODER &= ~GPIO_MODER_MODER5;
     GPIOA->MODER |= GPIO_MODER_MODER5_0;
 
-    /* TODO: Initialize UART for BBB communication */
+    /* TODO: Initialize USART1 (PA9/PA10) for BBB communication */
     /* TODO: Initialize I2C, SPI, PWM, DAC peripherals */
 
     xTaskCreate(
@@ -62,11 +62,13 @@ int main(void)
 /* ── Clock configuration ── */
 
 /**
- * Configure system clock to 84 MHz using HSI + PLL.
+ * Configure system clock to 84 MHz using PLL.
  *
- * HSI (16 MHz) -> PLL -> SYSCLK 84 MHz
- * PLL config: M=8, N=168, P=4 -> 84 MHz
- * VCO input = 16/8 = 2 MHz (recommended to minimize jitter)
+ * Clock source selected at compile time via USE_HSE (CMake option):
+ *   USE_HSE=ON  (default): HSE (8 MHz) / M=4  -> 2 MHz VCO input
+ *   USE_HSE=OFF:           HSI (16 MHz) / M=8  -> 2 MHz VCO input
+ *
+ * Both paths: VCO input * N=168 = 336 MHz, / P=4 = 84 MHz SYSCLK
  * APB1 = 42 MHz (div 2), APB2 = 84 MHz (div 1)
  */
 static void SystemClock_Config(void)
@@ -77,6 +79,14 @@ static void SystemClock_Config(void)
     /* Set voltage scaling to Scale 2 (for up to 84 MHz) */
     PWR->CR |= PWR_CR_VOS_1;
 
+#ifdef USE_HSE
+    /* Enable HSE and wait for it to stabilize */
+    RCC->CR |= RCC_CR_HSEON;
+    /* Wait for HSE to be ready */
+    while (!(RCC->CR & RCC_CR_HSERDY))
+        ;
+#endif
+
     /* Configure flash latency: 2 wait states for 84 MHz at 3.3V */
     /* Use 0 wait states up to 30 MHz, 1 up to 60 MHz, and 2 up to 90 MHz */
     FLASH->ACR = FLASH_ACR_LATENCY_2WS
@@ -84,12 +94,32 @@ static void SystemClock_Config(void)
                | FLASH_ACR_DCEN
                | FLASH_ACR_PRFTEN;
 
-    /* Configure PLL: source = HSI (16 MHz), M=8, N=168, P=4, Q=7 */
-    RCC->PLLCFGR = (8u << RCC_PLLCFGR_PLLM_Pos)   /* PLLM: divide HSI (16 MHz) → VCO input = 2 MHz */
-                |  (168u << RCC_PLLCFGR_PLLN_Pos) /* PLLN: multiply VCO input → VCO output = 2 MHz * 168 = 336 MHz */
-                |  (1u << RCC_PLLCFGR_PLLP_Pos)   /* PLLP: divide VCO output by 4 → SYSCLK = 336 / 4 = 84 MHz */
-                |  RCC_PLLCFGR_PLLSRC_HSI         /* PLL source = internal HSI oscillator (16 MHz) */
-                |  (7u << RCC_PLLCFGR_PLLQ_Pos);  /* PLLQ: divide VCO output by 7 → 336 / 7 = 48 MHz (for USB/RNG/SDIO) */
+    /* PLL configuration
+    *
+    * Goal:
+    *   SYSCLK = 84 MHz
+    *   USB    = 48 MHz
+    *
+    * PLL math:
+    *   VCO input  = source / M = 2 MHz (recommended)
+    *   VCO output = VCO in * N = 336 MHz
+    *   SYSCLK     = VCO out / P = 84 MHz
+    *   USB clock  = VCO out / Q = 48 MHz
+    *
+    * Source-dependent configuration:
+    *   HSE (8 MHz):  M = 4  → 8 / 4  = 2 MHz
+    *   HSI (16 MHz): M = 8  → 16 / 8 = 2 MHz
+    */
+    RCC->PLLCFGR = (168u << RCC_PLLCFGR_PLLN_Pos)
+                |  (1u   << RCC_PLLCFGR_PLLP_Pos)
+                |  (7u   << RCC_PLLCFGR_PLLQ_Pos)
+#ifdef USE_HSE
+                |  (4u   << RCC_PLLCFGR_PLLM_Pos)
+                |  RCC_PLLCFGR_PLLSRC_HSE;
+#else
+                |  (8u   << RCC_PLLCFGR_PLLM_Pos)
+                |  RCC_PLLCFGR_PLLSRC_HSI;
+#endif
 
     /* Enable PLL */
     RCC->CR |= RCC_CR_PLLON;

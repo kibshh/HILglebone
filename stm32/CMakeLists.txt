@@ -16,6 +16,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # ─── Target configuration ───
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/stm32_target.cmake)
 
+# ─── Clock source selection ───
+option(USE_HSE "Use external HSE oscillator instead of internal HSI" ON)
+
 # ─── CMSIS vendor paths ───
 set(CMSIS_CORE_DIR    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/cmsis_core/CMSIS/Core/Include)
 set(CMSIS_DEVICE_DIR  ${CMAKE_CURRENT_SOURCE_DIR}/vendor/cmsis_device_${STM32_FAMILY_LOWER}/Include)
@@ -89,6 +92,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     ${STM32_COMPILE_DEFINITIONS}
+    $<$<BOOL:${USE_HSE}>:USE_HSE>
 )
 
 set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX .elf)
