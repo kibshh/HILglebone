@@ -37,7 +37,11 @@ IMAGE_INSTALL:append = " hilglebone-orchestrator hilglebone-uart-overlay kernel-
 #
 #   openssh-sftp-server -- file transfer for pushing code onto the board
 #   htop                -- interactive process inspection
-IMAGE_INSTALL:append = "${@' openssh-sftp-server htop' if d.getVar('HILGLEBONE_DEV') == '1' else ''}"
+#   usb-gadget-net      -- USB Ethernet gadget (usb0 @ 192.168.7.2), lets
+#                          the laptop SSH into the BBB over the same
+#                          micro-USB cable that provides power. Pure
+#                          developer convenience; never ship this in prod.
+IMAGE_INSTALL:append = "${@' openssh-sftp-server htop usb-gadget-net' if d.getVar('HILGLEBONE_DEV') == '1' else ''}"
 
 # Image-level features. Same gating logic as above.
 #

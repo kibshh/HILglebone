@@ -1,0 +1,22 @@
+# systemd-networkd config for the USB gadget network interface.
+#
+# When the BeagleBone is plugged into a host PC via micro-USB and
+# the g_ether kernel module is loaded, the kernel creates a usb0
+# interface on the BBB. This file gives it a static IP so the host
+# can reach it at a known address.
+#
+# Host-side setup (laptop):
+#   - A new interface will appear (typically enx<mac> or usb0)
+#   - Assign it 192.168.7.1/24:
+#       sudo ip addr add 192.168.7.1/24 dev enx<...>
+#       sudo ip link set enx<...> up
+#   - Then: ssh root@192.168.7.2
+
+[Match]
+Name=usb0
+
+[Network]
+Address=192.168.7.2/24
+# No gateway on purpose: this link is point-to-point with the dev
+# machine, not a route to the internet. The BBB's eth0 (if used)
+# handles upstream routing separately.

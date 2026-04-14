@@ -1,0 +1,23 @@
+# Module options for the g_ether USB Ethernet gadget.
+#
+# Without these, g_ether generates random MAC addresses on every boot,
+# which means:
+#   - The host-side predictable interface name (enx<mac>) changes every
+#     time the BBB reboots, so host scripts can't target it by name.
+#   - The host's known_hosts / ARP cache / NetworkManager profiles all
+#     see a "new" device on each boot.
+#
+# Pinning the MACs fixes both. Values are locally administered unicast
+# addresses (first byte 0x02 -> U/L bit set, I/G bit clear).
+# 02 is used because it sets the “locally administered”
+# bit (bit1 = 1) while keeping the “unicast” bit (bit0 = 0).
+#
+#   host_addr -- MAC the host sees on ITS end of the link (i.e. the MAC
+#                of the enx<...> interface that appears on the laptop).
+#                With this value the laptop-side interface is named
+#                enx02bbbee00101.
+#   dev_addr  -- MAC the BBB's own usb0 interface carries.
+#
+# If you change host_addr, update bbb-usb-connect.sh in the repo root to
+# match; the host script finds the interface by this exact MAC.
+options g_ether host_addr=02:bb:be:e0:01:01 dev_addr=02:bb:be:e0:01:02
