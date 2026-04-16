@@ -13,9 +13,6 @@
 
 /* CRC-16/CCITT-FALSE covers TYPE + LEN(2) + SEQ + PAYLOAD. */
 #define CRC16_INIT              0xFFFFU
-#define CRC16_POLY              0x1021U
-#define CRC16_MSBIT_MASK        0x8000U
-#define CRC16_BITS_IN_BYTE      8U
 
 /* Compute CRC over `len` bytes of `data`, starting from `seed`.
  * Pass `CRC16_INIT` for the initial call; pass the previous return

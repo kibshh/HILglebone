@@ -2,6 +2,11 @@
 
 #include "crc16.h"
 
+/* Calculation specific constants */
+#define CRC16_POLY              0x1021U
+#define CRC16_MSBIT_MASK        0x8000U
+#define CRC16_BITS_IN_BYTE      8U
+
 /* Bitwise implementation. Small, branch-light, no table -- fine at 115200
  * baud (max one frame of ~260 B every ~23 ms; CRC cost is trivial). Swap for
  * a table-driven version later if we raise the baud rate into Mbit territory. */
