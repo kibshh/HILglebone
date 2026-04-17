@@ -174,10 +174,10 @@ Payload that follows the `sensor_id` byte (offset 1 of the generic payload):
 |--------|------|-------------|-------------------------------------------------------|
 | 0      | 1    | `sensor_id` | From the setup ACK                                    |
 | 1      | 2    | `reg_start` | Starting register offset, LE                          |
-| 3      | 2    | `value_len` | Number of bytes to write into the map, LE             |
-| 5      | N    | `values`    | `value_len` raw bytes, written sequentially           |
+| 3      | 2    | `values_len` | Number of bytes to write into the map, LE             |
+| 5      | N    | `values`    | `values_len` raw bytes, written sequentially           |
 
-`reg_start + value_len` must be `<= register_count`, else the STM32 replies
+`reg_start + values_len` must be `<= register_count`, else the STM32 replies
 `RSP_ACK` with `error_code = ERR_I2C_REGISTER_OOB` and `sensor_id` echoed.
 
 This command **only updates the in-memory register map**. The next DUT read
@@ -191,7 +191,7 @@ LSB count, etc.) *and* for the byte order the emulated sensor specifies.
 Example: the BME280 stores temperature as a 20-bit big-endian value split
 across three registers (high, mid, low-nibble in the upper 4 bits of a byte).
 The BBB crafts those three bytes and issues a single `CMD_SET_OUTPUT` with
-`reg_start=0xFA, value_len=3, values=[MSB, MID, LSB]`.
+`reg_start=0xFA, values_len=3, values=[MSB, MID, LSB]`.
 
 ## 5. CMD_STOP_SENSOR -- I2C
 
@@ -218,7 +218,7 @@ Protocol-scoped codes occupy range `0x40..0x5F` (the "I2C slice" of
 |      |                                  | the corresponding flag; 10-bit: address > 0x3FF                           |
 | 0x44 | `ERR_I2C_REGMAP_TOO_LARGE`       | `register_count` exceeds the shared register-storage budget               |
 | 0x45 | `ERR_I2C_BAD_ADDR_MODE`          | `address_mode` out of range or `secondary_addr != 0` in 10-bit mode       |
-| 0x46 | `ERR_I2C_REGISTER_OOB`           | `CMD_SET_OUTPUT` or preset: `reg_start + value_len` exceeds               |
+| 0x46 | `ERR_I2C_REGISTER_OOB`           | `CMD_SET_OUTPUT` or preset: `reg_start + values_len` exceeds               |
 |      |                                  | `register_count`                                                          |
 | 0x47 | `ERR_I2C_STRETCH_EXCEEDS_BUS`    | `response_delay_us` or `clock_stretch_max_us` violates `clock_hz` budget  |
 | 0x48 | `ERR_I2C_SMBUS_REQUIRED`         | `pec_required` set but `smbus_mode` not set                               |
@@ -293,7 +293,7 @@ stored across `0xFA, 0xFB, 0xFC`.
 CMD_SET_OUTPUT:
   sensor_id  = 0x01
   reg_start  = 0x00FA   (LE: FA 00)
-  value_len  = 0x0003   (LE: 03 00)
+  values_len  = 0x0003   (LE: 03 00)
   values     = [0x83, 0x00, 0x00]
 ```
 
@@ -335,3 +335,10 @@ Things explicitly **not** in v1; candidates for later:
   only slave and a single master drives the bus.
 - **10-bit address + dual-address combinations** (may require separate
   peripheral instances).
+
+## 9. References
+
+| Document | Description | Link |
+|----------|-------------|------|
+| NXP UM10204 | I2C-bus specification and user manual (reserved addresses in Table 4, timing in §6) | https://www.nxp.com/docs/en/user-guide/UM10204.pdf |
+| RM0368 §18 | STM32F401 I2C peripheral register reference | https://www.st.com/resource/en/reference_manual/rm0368-stm32f401xbc-and-stm32f401xde-advanced-armbased-32bit-mcus-stmicroelectronics.pdf |
