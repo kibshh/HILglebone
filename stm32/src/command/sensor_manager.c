@@ -65,7 +65,7 @@ static uint8_t allocate_id(void)
 
 uint8_t sensor_manager_register(uint8_t protocol_id, uint8_t internal_id)
 {
-    assert(protocol_id != PROTO_SENSOR_ID_NONE);
+    assert(protocol_id != PROTO_ID_NONE);
 
     sensor_slot_t *slot = NULL;
     for (unsigned i = 0; i < SENSOR_MAX_SLOTS; ++i)
