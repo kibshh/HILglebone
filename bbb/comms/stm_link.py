@@ -22,16 +22,22 @@ PORT_TIMEOUT_S: float   = 0.05   # read() blocks at most this long when idle
 SYNC_RETRIES: int       = 5
 SYNC_TIMEOUT_S: float   = 1.0    # per-attempt deadline
 
+# General command timeout.
+CMD_TIMEOUT_S: float    = 3.0    # send_command() deadline
+
 # ── Imports ────────────────────────────────────────────────────────
 
 from protocol import (
+    AckResponse,
     Frame,
     FrameType,
     ParseError,
     ProtocolParser,
     SeqCounter,
     build_cmd_sync,
+    encode_frame,
     parse_ack,
+    parse_error_response,
 )
 
 
@@ -46,6 +52,10 @@ class SyncError(Exception):
     """CMD_SYNC handshake failed after all retries."""
 
 
+class CommandError(Exception):
+    """A command received an error ACK or timed out waiting for a response."""
+
+
 class StmLink:
     """Async serial bridge to the STM32.
 
@@ -55,13 +65,13 @@ class StmLink:
 
     Usage::
 
-        async with StmLink("/dev/ttyO1") as link:
+        async with StmLink("/dev/ttyS1") as link:
             await link.sync()
             # issue commands ...
 
     Or manually::
 
-        link = StmLink("/dev/ttyO1")
+        link = StmLink("/dev/ttyS1")
         link.open()
         try:
             await link.sync()
@@ -106,7 +116,7 @@ class StmLink:
         """Close the serial port and shut down the reader thread pool."""
         if self._port is not None and self._port.is_open:
             self._port.close()
-        self._executor.shutdown(wait=False)
+        self._executor.shutdown(wait=True)
 
     async def __aenter__(self) -> StmLink:
         self.open()
@@ -124,7 +134,8 @@ class StmLink:
         blocks in the executor for up to _PORT_TIMEOUT_S seconds waiting
         for at least one byte. This avoids a busy-wait spin.
         """
-        assert self._port is not None, "port not open"
+        if self._port is None:
+            raise RuntimeError("port not open")
         port = self._port
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
@@ -133,8 +144,57 @@ class StmLink:
         )
 
     def _write(self, data: bytes) -> None:
-        assert self._port is not None, "port not open"
+        if self._port is None:
+            raise RuntimeError("port not open")
         self._port.write(data)
+
+    # ── ACK reader (shared by sync and send_command) ───────────────
+
+    async def _await_ack(
+        self,
+        seq: int,
+        expected_cmd_type: int,
+        timeout_s: float,
+    ) -> AckResponse:
+        """Read until a matching RSP_ACK arrives; let TimeoutError propagate.
+
+        Unsolicited frames and parse errors are forwarded to the registered
+        hooks so they are never silently dropped.  Frames with the wrong seq
+        are also forwarded as unsolicited and do not break the wait.
+
+        Raises:
+            CommandError:   if the ACK carries a non-zero error_code or its
+                            cmd_type does not match ``expected_cmd_type``.
+            TimeoutError:   if ``timeout_s`` elapses with no matching ACK
+                            (not caught here — callers decide how to react).
+        """
+        async with asyncio.timeout(timeout_s):
+            while True:
+                chunk = await self._read()
+                for event in self._parser.feed_bytes(chunk):
+                    if isinstance(event, ParseError):
+                        self.on_parse_error(event)
+                        continue
+                    if not isinstance(event, Frame):
+                        continue
+                    if event.type != FrameType.RSP_ACK:
+                        self.on_unsolicited_frame(event)
+                        continue
+                    if event.seq != seq:
+                        self.on_unsolicited_frame(event)
+                        continue
+                    ack = parse_ack(event)
+                    if not ack.ok:
+                        raise CommandError(
+                            f"frame_type=0x{ack.cmd_type:02X} seq={seq}: "
+                            f"RSP_ACK error_code=0x{ack.error_code:02X}"
+                        )
+                    if ack.cmd_type != expected_cmd_type:
+                        raise CommandError(
+                            f"expected cmd_type=0x{expected_cmd_type:02X} seq={seq}: "
+                            f"ACK cmd_type mismatch 0x{ack.cmd_type:02X}"
+                        )
+                    return ack
 
     # ── Synchronization ────────────────────────────────────────────
 
@@ -160,35 +220,55 @@ class StmLink:
         for attempt in range(1, retries + 1):
             sent_seq = self._seq.next()
             self._write(build_cmd_sync(sent_seq))
-
             try:
-                async with asyncio.timeout(timeout_s):
-                    while True:
-                        chunk = await self._read()
-                        for event in self._parser.feed_bytes(chunk):
-                            if isinstance(event, ParseError):
-                                self.on_parse_error(event)
-                                continue
-                            assert isinstance(event, Frame)
-                            if event.type != FrameType.RSP_ACK:
-                                self.on_unsolicited_frame(event)
-                                continue
-                            if event.seq != sent_seq:
-                                self.on_unsolicited_frame(event)
-                                continue
-                            ack = parse_ack(event)
-                            if ack.ok:
-                                return
-                            # ACK with error — not expected for SYNC, treat as failure.
-                            raise SyncError(
-                                f"CMD_SYNC attempt {attempt}: RSP_ACK returned "
-                                f"error_code=0x{ack.error_code:02X}"
-                            )
+                await self._await_ack(sent_seq, FrameType.CMD_SYNC, timeout_s)
+                return
             except TimeoutError:
-                # No response within the window — retry.
-                continue
+                continue  # no response within the window — retry
+            except CommandError as exc:
+                raise SyncError(f"CMD_SYNC attempt {attempt}: {exc}") from exc
 
         raise SyncError(
             f"CMD_SYNC failed: no valid RSP_ACK after {retries} "
             f"attempt(s) ({timeout_s}s timeout each)"
         )
+
+    # ── Generic command ────────────────────────────────────────────
+
+    async def send_command(
+        self,
+        frame_type: int,
+        payload: bytes = b"",
+        timeout_s: float = CMD_TIMEOUT_S,
+    ) -> AckResponse:
+        """Send any command frame and wait for a matching RSP_ACK.
+
+        Allocates a fresh sequence number, encodes the frame, writes it,
+        then reads responses until the matching RSP_ACK (same seq) arrives.
+        Unsolicited frames and parse errors are forwarded to the registered
+        event hooks and do not interrupt the wait.
+
+        Args:
+            frame_type: One of the ``FrameType.CMD_*`` constants.
+            payload:    Command-specific payload bytes (default empty).
+            timeout_s:  Deadline in seconds (default :data:`CMD_TIMEOUT_S`).
+
+        Returns:
+            :class:`~protocol.AckResponse` for the sent frame.
+
+        Raises:
+            CommandError:               if the ACK carries a non-zero error_code
+                                        or the deadline expires.
+            serial.SerialException:     if the port fails mid-command.
+            ValueError:                 if ``frame_type`` or ``payload`` are invalid
+                                        (propagated from :func:`~protocol.encode_frame`).
+        """
+        seq = self._seq.next()
+        self._write(encode_frame(frame_type, seq=seq, payload=payload))
+        try:
+            return await self._await_ack(seq, frame_type, timeout_s)
+        except TimeoutError:
+            raise CommandError(
+                f"command 0x{frame_type:02X} seq={seq}: "
+                f"no RSP_ACK within {timeout_s}s"
+            ) from None
