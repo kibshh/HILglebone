@@ -1,5 +1,7 @@
 #include "protocol_parser.h"
 
+#include <assert.h>
+
 #include "crc16.h"
 #include "protocol.h"
 
