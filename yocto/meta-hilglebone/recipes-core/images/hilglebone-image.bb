@@ -41,7 +41,7 @@ IMAGE_INSTALL:append = " hilglebone-orchestrator hilglebone-uart-overlay kernel-
 #                          the laptop SSH into the BBB over the same
 #                          micro-USB cable that provides power. Pure
 #                          developer convenience; never ship this in prod.
-IMAGE_INSTALL:append = "${@' openssh-sftp-server htop usb-gadget-net' if d.getVar('HILGLEBONE_DEV') == '1' else ''}"
+IMAGE_INSTALL:append = "${@' openssh-sftp-server htop rsync usb-gadget-net' if d.getVar('HILGLEBONE_DEV') == '1' else ''}"
 
 # Image-level features. Same gating logic as above.
 #
