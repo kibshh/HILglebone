@@ -1,0 +1,42 @@
+# Build artifacts
+build/
+_build/
+*.o
+*.elf
+*.bin
+*.hex
+*.map
+*.lst
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# Yocto
+yocto/build/
+yocto/downloads/
+yocto/sstate-cache/
+yocto/tmp/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs (keep structure, ignore content)
+logs/*.json
+logs/*.log
+
+# Secrets / credentials
+*.pem
+*.key
