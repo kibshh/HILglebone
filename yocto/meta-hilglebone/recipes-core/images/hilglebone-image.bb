@@ -37,6 +37,10 @@ IMAGE_INSTALL:append = " hilglebone-orchestrator hilglebone-uart-overlay kernel-
 #
 #   openssh-sftp-server -- file transfer for pushing code onto the board
 #   htop                -- interactive process inspection
+#   rsync               -- incremental file sync from the host (delta-only
+#                          transfers; far faster than scp for repeated
+#                          pushes of the orchestrator source tree). scp
+#                          works without it but copies everything every time.
 #   usb-gadget-net      -- USB Ethernet gadget (usb0 @ 192.168.7.2), lets
 #                          the laptop SSH into the BBB over the same
 #                          micro-USB cable that provides power. Pure

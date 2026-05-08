@@ -8,8 +8,8 @@ Common targets:
 
 Output after a successful build:
 
-    tmp/deploy/images/beaglebone/hilglebone-image-beaglebone.wic.xz
+    deploy-ti/images/beaglebone/hilglebone-image-beaglebone.rootfs.wic.xz
 
 To flash:
 
-    sudo bmaptool copy tmp/deploy/images/beaglebone/hilglebone-image-beaglebone.wic.xz /dev/sdX
+    sudo bmaptool copy deploy-ti/images/beaglebone/hilglebone-image-beaglebone.rootfs.wic.xz /dev/sdX
