@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <stddef.h>
 
+#include "digital_out_sensor.h"
 #include "i2c_sensor.h"
 #include "protocol.h"
 #include "protocol_encoder.h"
@@ -49,9 +50,12 @@ static void handle_setup(const parsed_frame_t *f)
         err = i2c_sensor_setup(cfg, cfg_len, &sensor_id);
         break;
 
+    case PROTO_ID_DIGITAL_OUT:
+        err = digital_out_sensor_setup(cfg, cfg_len, &sensor_id);
+        break;
+
     /* Other protocol IDs are known but not yet implemented. */
     case PROTO_ID_SPI:
-    case PROTO_ID_DIGITAL_OUT:
     case PROTO_ID_DIGITAL_IN:
     case PROTO_ID_DAC:
     case PROTO_ID_PWM:
@@ -113,6 +117,10 @@ static void handle_set_output(const parsed_frame_t *f)
         err = i2c_sensor_set_output(slot->internal_id, values, values_len);
         break;
 
+    case PROTO_ID_DIGITAL_OUT:
+        err = digital_out_sensor_set_output(slot->internal_id, values, values_len);
+        break;
+
     default:
         err = ERR_PROTOCOL_UNSUPPORTED;
         break;
@@ -154,6 +162,10 @@ static void handle_stop(const parsed_frame_t *f)
         err = i2c_sensor_stop(slot->internal_id);
         break;
 
+    case PROTO_ID_DIGITAL_OUT:
+        err = digital_out_sensor_stop(slot->internal_id);
+        break;
+
     default:
         err = ERR_PROTOCOL_UNSUPPORTED;
         break;
@@ -171,6 +183,7 @@ void dispatcher_init(void)
 {
     sensor_manager_init();
     i2c_sensor_init();
+    digital_out_sensor_init();
 }
 
 void dispatcher_handle(const parsed_frame_t *frame)
