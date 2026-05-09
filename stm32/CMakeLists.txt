@@ -20,16 +20,27 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/stm32_target.cmake)
 option(USE_HSE "Use external HSE oscillator instead of internal HSI" ON)
 
 # ─── CMSIS vendor paths ───
-set(CMSIS_CORE_DIR    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/cmsis_core/CMSIS/Core/Include)
-set(CMSIS_DEVICE_DIR  ${CMAKE_CURRENT_SOURCE_DIR}/vendor/cmsis_device_${STM32_FAMILY_LOWER}/Include)
-set(CMSIS_STARTUP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/cmsis_device_${STM32_FAMILY_LOWER}/Source/Templates/gcc)
-set(CMSIS_SYSTEM_DIR  ${CMAKE_CURRENT_SOURCE_DIR}/vendor/cmsis_device_${STM32_FAMILY_LOWER}/Source/Templates)
+set(CMSIS_CORE_DIR    ${CMAKE_CURRENT_SOURCE_DIR}/project/vendor/cmsis_core/CMSIS/Core/Include)
+set(CMSIS_DEVICE_DIR  ${CMAKE_CURRENT_SOURCE_DIR}/project/vendor/cmsis_device_${STM32_FAMILY_LOWER}/Include)
+set(CMSIS_STARTUP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/project/vendor/cmsis_device_${STM32_FAMILY_LOWER}/Source/Templates/gcc)
+set(CMSIS_SYSTEM_DIR  ${CMAKE_CURRENT_SOURCE_DIR}/project/vendor/cmsis_device_${STM32_FAMILY_LOWER}/Source/Templates)
 
-# ─── FreeRTOS Kernel ───
-set(FREERTOS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/freertos_kernel)
+# ─── INTERFACE library: CMSIS headers ───
+add_library(cmsis INTERFACE)
+target_include_directories(cmsis INTERFACE
+    ${CMSIS_CORE_DIR}
+    ${CMSIS_DEVICE_DIR}
+)
+target_compile_definitions(cmsis INTERFACE
+    ${STM32_COMPILE_DEFINITIONS}
+    $<$<BOOL:${USE_HSE}>:USE_HSE>
+)
+
+# ─── FreeRTOS kernel library ───
+set(FREERTOS_DIR      ${CMAKE_CURRENT_SOURCE_DIR}/project/vendor/freertos_kernel)
 set(FREERTOS_PORT_DIR ${FREERTOS_DIR}/portable/GCC/ARM_CM4F)
 
-set(FREERTOS_SOURCES
+add_library(freertos_kernel STATIC
     ${FREERTOS_DIR}/tasks.c
     ${FREERTOS_DIR}/queue.c
     ${FREERTOS_DIR}/list.c
@@ -38,15 +49,11 @@ set(FREERTOS_SOURCES
     ${FREERTOS_DIR}/portable/MemMang/heap_4.c
     ${FREERTOS_PORT_DIR}/port.c
 )
-
-# ─── Sources ───
-file(GLOB_RECURSE APP_SOURCES src/*.c)
-
-set(STARTUP_FILE ${CMSIS_STARTUP_DIR}/${STM32_STARTUP})
-set(SYSTEM_FILE  ${CMSIS_SYSTEM_DIR}/system_stm32${STM32_FAMILY_LOWER}xx.c)
-
-# ─── Linker script ───
-set(LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/STM32_FLASH.ld)
+target_include_directories(freertos_kernel PUBLIC
+    ${FREERTOS_DIR}/include
+    ${FREERTOS_PORT_DIR}
+)
+target_link_libraries(freertos_kernel PUBLIC cmsis)
 
 # ─── Compiler flags ───
 set(COMMON_FLAGS "${STM32_CPU_FLAGS} -Wall -Wextra -Werror")
@@ -64,8 +71,20 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
 endif()
 
+# ─── Components ───
+add_subdirectory(project/shared)
+add_subdirectory(project/drivers)
+add_subdirectory(project/protocol)
+add_subdirectory(project/simulate)
+add_subdirectory(project/command)
+add_subdirectory(project/app)
+
+# FreeRTOS needs FreeRTOSConfig.h from shared/inc.
+target_link_libraries(freertos_kernel PUBLIC shared)
+
 # ─── Linker flags ───
-# Pass flash/RAM geometry to the linker script as defines
+set(LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/STM32_FLASH.ld)
+
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -T${LINKER_SCRIPT}")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--gc-sections")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--print-memory-usage")
@@ -74,25 +93,25 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--defsym=FLASH_SIZE=${
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--defsym=RAM_ORIGIN=${STM32_RAM_ORIGIN}")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--defsym=RAM_SIZE=${STM32_RAM_SIZE}")
 
-# ─── Executable target ───
+# ─── Executable ───
+set(STARTUP_FILE ${CMSIS_STARTUP_DIR}/${STM32_STARTUP})
+set(SYSTEM_FILE  ${CMSIS_SYSTEM_DIR}/system_stm32${STM32_FAMILY_LOWER}xx.c)
+
 add_executable(${PROJECT_NAME}
-    ${APP_SOURCES}
     ${STARTUP_FILE}
     ${SYSTEM_FILE}
-    ${FREERTOS_SOURCES}
 )
 
-target_include_directories(${PROJECT_NAME} PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMSIS_CORE_DIR}
-    ${CMSIS_DEVICE_DIR}
-    ${FREERTOS_DIR}/include
-    ${FREERTOS_PORT_DIR}
-)
-
-target_compile_definitions(${PROJECT_NAME} PRIVATE
-    ${STM32_COMPILE_DEFINITIONS}
-    $<$<BOOL:${USE_HSE}>:USE_HSE>
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    app
+    command
+    simulate
+    protocol
+    uart
+    gpio
+    shared
+    freertos_kernel
+    cmsis
 )
 
 set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX .elf)

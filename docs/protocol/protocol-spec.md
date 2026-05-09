@@ -17,8 +17,8 @@ Protocol-specific payloads (what bytes go inside `CMD_SETUP_SENSOR` and
 spec files:
 
 - [i2c-sensors-spec.md](i2c-sensors-spec.md) -- I2C slave emulation
+- [digital-io-spec.md](digital-io-spec.md) -- digital output / input simulation
 - `spi-sensors-spec.md` -- (TBD) SPI slave emulation
-- `digital-io-spec.md` -- (TBD) digital output / input simulation
 - `analog-spec.md` -- (TBD) DAC / PWM / analog output simulation
 
 ## Design Principles
@@ -126,8 +126,8 @@ Payload layout (generic framing -- inner bytes vary by protocol):
 |------|--------------------|---------------------------------------------|
 | 0x01 | I2C slave          | [i2c-sensors-spec.md](i2c-sensors-spec.md)  |
 | 0x02 | SPI slave          | (TBD)                                       |
-| 0x03 | Digital output     | (TBD)                                       |
-| 0x04 | Digital input      | (TBD)                                       |
+| 0x03 | Digital output     | [digital-io-spec.md](digital-io-spec.md)    |
+| 0x04 | Digital input      | [digital-io-spec.md](digital-io-spec.md) (reserved) |
 | 0x05 | Analog output (DAC)| (TBD)                                       |
 | 0x06 | PWM output         | (TBD)                                       |
 | 0x07 | Frequency output   | (TBD)                                       |
