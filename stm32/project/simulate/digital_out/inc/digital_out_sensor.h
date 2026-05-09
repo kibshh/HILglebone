@@ -54,18 +54,11 @@
 
 /* Pulse timer kind: pinned at setup, fixed for the sensor's lifetime.
  *   SOFTWARE -- FreeRTOS xTimer; ~1 ms resolution; pulse duration unbounded.
- *   HARDWARE -- one of the dedicated TIMs reserved at setup; 1 µs
- *               resolution; pulse-duration cap depends on `pulse_range`. */
+ *   HARDWARE -- a specific hw_timer_id_t timer reserved at setup; 1 µs
+ *               resolution; pulse-duration cap depends on the timer width. */
 #define DIGITAL_OUT_TIMER_SOFTWARE      0U
 #define DIGITAL_OUT_TIMER_HARDWARE      1U
 #define DIGITAL_OUT_TIMER_KIND_MAX      DIGITAL_OUT_TIMER_HARDWARE
-
-/* Pulse-range sub-pool selector. Only consulted when timer_kind = HARDWARE.
- *   SHORT -- 16-bit timer (TIM9/10/11); pulses up to 65 535 µs.
- *   LONG  -- 32-bit timer (TIM2/5);     pulses up to ~71 minutes. */
-#define DIGITAL_OUT_PULSE_RANGE_SHORT   0U
-#define DIGITAL_OUT_PULSE_RANGE_LONG    1U
-#define DIGITAL_OUT_PULSE_RANGE_MAX     DIGITAL_OUT_PULSE_RANGE_LONG
 
 /* Logical levels. */
 #define DIGITAL_OUT_LEVEL_LOW           0U
@@ -80,7 +73,7 @@
 #define DIGITAL_OUT_CFG_OFFSET_SPEED            4U      /* u8 */
 #define DIGITAL_OUT_CFG_OFFSET_PULL             5U      /* u8 */
 #define DIGITAL_OUT_CFG_OFFSET_TIMER_KIND       6U      /* u8 */
-#define DIGITAL_OUT_CFG_OFFSET_PULSE_RANGE      7U      /* u8 (used iff timer_kind=HARDWARE) */
+#define DIGITAL_OUT_CFG_OFFSET_TIMER_ID         7U      /* u8 = hw_timer_id_t (used iff timer_kind=HARDWARE) */
 #define DIGITAL_OUT_CFG_SIZE                    8U
 
 /* ── CMD_SET_OUTPUT payload (after the generic sensor_id byte) ───── */

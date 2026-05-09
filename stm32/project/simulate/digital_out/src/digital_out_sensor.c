@@ -8,8 +8,8 @@
 #include "FreeRTOS.h"
 #include "timers.h"
 
-#include "digital_out_pulse_timer.h"
 #include "gpio.h"
+#include "hw_timer.h"
 #include "helpers.h"
 #include "protocol.h"
 #include "sensor_manager.h"
@@ -26,7 +26,7 @@ typedef struct
     gpio_pin_t    gpio_pin;
 
     uint8_t       timer_kind;
-    uint8_t       pulse_range;
+    hw_timer_id_t timer_id;       /* explicit timer (used iff timer_kind=HARDWARE) */
 
     TimerHandle_t sw_timer;
     uint8_t       pulse_revert_level;
@@ -120,16 +120,16 @@ static uint8_t validate_cfg(const uint8_t        *cfg,
     uint8_t speed         = cfg[DIGITAL_OUT_CFG_OFFSET_SPEED];
     uint8_t pull          = cfg[DIGITAL_OUT_CFG_OFFSET_PULL];
     uint8_t timer_kind    = cfg[DIGITAL_OUT_CFG_OFFSET_TIMER_KIND];
-    uint8_t pulse_range   = cfg[DIGITAL_OUT_CFG_OFFSET_PULSE_RANGE];
+    uint8_t timer_id_u8   = cfg[DIGITAL_OUT_CFG_OFFSET_TIMER_ID];
 
     if (port > DIGITAL_OUT_PORT_MAX ||
         pin  > DIGITAL_OUT_PIN_MAX  ||
-        initial_level > DIGITAL_OUT_LEVEL_HIGH      ||
-        output_type   > DIGITAL_OUT_TYPE_MAX        ||
-        speed         > DIGITAL_OUT_SPEED_MAX       ||
-        pull          > DIGITAL_OUT_PULL_MAX        ||
-        timer_kind    > DIGITAL_OUT_TIMER_KIND_MAX  ||
-        pulse_range   > DIGITAL_OUT_PULSE_RANGE_MAX)
+        initial_level > DIGITAL_OUT_LEVEL_HIGH     ||
+        output_type   > DIGITAL_OUT_TYPE_MAX       ||
+        speed         > DIGITAL_OUT_SPEED_MAX      ||
+        pull          > DIGITAL_OUT_PULL_MAX       ||
+        timer_kind    > DIGITAL_OUT_TIMER_KIND_MAX ||
+        (timer_kind == DIGITAL_OUT_TIMER_HARDWARE && timer_id_u8 >= HW_TIMER_COUNT))
     {
         return ERR_INVALID_PARAMETER;
     }
@@ -147,7 +147,7 @@ static uint8_t validate_cfg(const uint8_t        *cfg,
     out_state->gpio_port  = gpio_port;
     out_state->gpio_pin   = gpio_pin;
     out_state->timer_kind = timer_kind;
-    out_state->pulse_range = pulse_range;
+    out_state->timer_id   = (hw_timer_id_t)timer_id_u8;
 
     out_gpio_cfg->pin         = gpio_pin;
     out_gpio_cfg->output_type = (gpio_output_type_t)output_type;
@@ -168,7 +168,7 @@ void digital_out_sensor_init(void)
     }
     memset(pin_owned, 0, sizeof(pin_owned));
 
-    pulse_timer_hw_init();
+    /* hw_timer_init() is called from dispatcher_init() before this. */
 }
 
 uint8_t digital_out_sensor_setup(const uint8_t *cfg,
@@ -198,12 +198,7 @@ uint8_t digital_out_sensor_setup(const uint8_t *cfg,
 
     if (s->timer_kind == DIGITAL_OUT_TIMER_HARDWARE)
     {
-        pulse_timer_hw_kind_t hw_kind =
-            (s->pulse_range == DIGITAL_OUT_PULSE_RANGE_LONG)
-            ? PULSE_TIMER_HW_KIND_LONG
-            : PULSE_TIMER_HW_KIND_SHORT;
-
-        if (!pulse_timer_hw_acquire(idx, hw_kind, hw_timer_callback))
+        if (!hw_timer_pulse_acquire(s->timer_id, idx, hw_timer_callback))
         {
             return ERR_OUT_OF_RESOURCES;
         }
@@ -224,7 +219,7 @@ uint8_t digital_out_sensor_setup(const uint8_t *cfg,
         gpio_reset_to_defaults(s->gpio_pin);
         if (s->timer_kind == DIGITAL_OUT_TIMER_HARDWARE)
         {
-            pulse_timer_hw_release(idx);
+            hw_timer_pulse_release(idx);
         }
         pin_owned[s->gpio_port] &= (uint16_t)~(1U << s->gpio_pin.pin);
         memset(s, 0, sizeof(*s));
@@ -262,7 +257,7 @@ uint8_t digital_out_sensor_set_output(uint8_t        internal_id,
     }
 
     if (s->timer_kind == DIGITAL_OUT_TIMER_HARDWARE &&
-        pulse_us > pulse_timer_hw_get_max_pulse_us(internal_id))
+        pulse_us > hw_timer_pulse_max_us(internal_id))
     {
         return ERR_INVALID_PARAMETER;
     }
@@ -285,7 +280,7 @@ uint8_t digital_out_sensor_set_output(uint8_t        internal_id,
 
     if (s->timer_kind == DIGITAL_OUT_TIMER_HARDWARE)
     {
-        if (!pulse_timer_hw_start(internal_id, pulse_us))
+        if (!hw_timer_pulse_start(internal_id, pulse_us))
         {
             return ERR_INTERNAL;
         }
@@ -341,7 +336,7 @@ uint8_t digital_out_sensor_stop(uint8_t internal_id)
     }
     if (s->timer_kind == DIGITAL_OUT_TIMER_HARDWARE)
     {
-        pulse_timer_hw_release(internal_id);
+        hw_timer_pulse_release(internal_id);
     }
 
     gpio_reset_to_defaults(s->gpio_pin);
