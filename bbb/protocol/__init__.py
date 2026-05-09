@@ -46,6 +46,13 @@ from .constants import (
     HEADER_SIZE,
     MAX_PAYLOAD_SIZE,
     START_BYTE,
+    DigitalLevel,
+    DigitalOutputType,
+    DigitalPort,
+    DigitalPulseRange,
+    DigitalPull,
+    DigitalSpeed,
+    DigitalTimerKind,
     ErrorCode,
     FrameType,
     I2cAddressMode,
@@ -65,6 +72,11 @@ from .encoder import (
     encode_frame,
     parse_ack,
     parse_error_response,
+)
+from .digital_io import (
+    DigitalOutConfig,
+    pack_digital_out_cfg,
+    pack_digital_out_set_output,
 )
 from .frame import AckResponse, ErrorResponse, Frame, ParseError, ParseErrorReason
 from .i2c import I2cSensorConfig, pack_i2c_cfg, pack_i2c_set_output
@@ -93,6 +105,10 @@ __all__ = [
     "I2cSensorConfig",
     "pack_i2c_cfg",
     "pack_i2c_set_output",
+    # Digital-output backend
+    "DigitalOutConfig",
+    "pack_digital_out_cfg",
+    "pack_digital_out_set_output",
     # Constants
     "START_BYTE",
     "MAX_PAYLOAD_SIZE",
@@ -107,6 +123,13 @@ __all__ = [
     "I2cFlag",
     "I2cRegAddrEndian",
     "I2cRegAddrWidth",
+    "DigitalPort",
+    "DigitalOutputType",
+    "DigitalSpeed",
+    "DigitalPull",
+    "DigitalLevel",
+    "DigitalTimerKind",
+    "DigitalPulseRange",
     # CRC utilities
     "CRC16_INIT",
     "crc16_ccitt",

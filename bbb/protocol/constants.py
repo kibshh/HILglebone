@@ -98,3 +98,41 @@ class I2cFlag(IntFlag):
     DUT_WRITES_ALLOWED   = 1 << 4
     INTERNAL_PULLUPS     = 1 << 5
     CLOCK_STRETCH_ENABLE = 1 << 6
+
+# ── Digital output field enumerants ────────────────────────────────
+
+class DigitalPort(IntEnum):
+    A = 0
+    B = 1
+    C = 2
+    D = 3
+    E = 4
+    H = 5
+
+class DigitalOutputType(IntEnum):
+    PUSH_PULL  = 0
+    OPEN_DRAIN = 1
+
+class DigitalSpeed(IntEnum):
+    LOW       = 0
+    MEDIUM    = 1
+    HIGH      = 2
+    VERY_HIGH = 3
+
+class DigitalPull(IntEnum):
+    NONE = 0
+    UP   = 1
+    DOWN = 2
+
+class DigitalLevel(IntEnum):
+    LOW  = 0
+    HIGH = 1
+
+class DigitalTimerKind(IntEnum):
+    SOFTWARE = 0   # FreeRTOS xTimer; ~1 ms resolution; unbounded duration
+    HARDWARE = 1   # Dedicated TIM reserved at setup; 1 µs resolution
+
+class DigitalPulseRange(IntEnum):
+    """Sub-pool selector for HW timer slots. Ignored when timer_kind=SOFTWARE."""
+    SHORT = 0   # TIM9/10/11 (16-bit); pulses up to 65 535 µs
+    LONG  = 1   # TIM2/5     (32-bit); pulses up to ~71 minutes
