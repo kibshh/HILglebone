@@ -95,11 +95,9 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--defsym=RAM_SIZE=${ST
 
 # ─── Executable ───
 set(STARTUP_FILE ${CMSIS_STARTUP_DIR}/${STM32_STARTUP})
-set(SYSTEM_FILE  ${CMSIS_SYSTEM_DIR}/system_stm32${STM32_FAMILY_LOWER}xx.c)
 
 add_executable(${PROJECT_NAME}
     ${STARTUP_FILE}
-    ${SYSTEM_FILE}
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
