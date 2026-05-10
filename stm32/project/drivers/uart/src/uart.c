@@ -6,7 +6,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-#include "helpers.h"
+#include "gpio.h"
 
 /* ── Pin assignments ──────────────────────────────────────────────── */
 

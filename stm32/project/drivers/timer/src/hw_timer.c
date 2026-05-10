@@ -6,15 +6,8 @@
 
 #include "protocol.h"   /* ERR_PERIPHERAL_BUSY, ERR_SUCCESS */
 
-/* ── Timer clock ──────────────────────────────────────────────────── */
-
-/* All seven timers run at 84 MHz. APB1 timers (TIM2-5) get 42 MHz × 2
- * (multiplier applies when APB1 prescaler != /1). APB2 timers (TIM9-11)
- * get 84 MHz directly (APB2 prescaler = /1, no multiplier). */
-#define HW_TIMER_CLOCK_HZ   84000000U
-
 /* One-shot pulse: 1 µs per tick (PSC = 83 at 84 MHz). */
-#define PULSE_PSC           (HW_TIMER_CLOCK_HZ / 1000000U - 1U)
+#define PULSE_PSC           (HW_TIMER_CLOCK_HZ / 1000000UL - 1UL)
 
 /* NVIC priority -- same band as UART ISR, below FreeRTOS syscall floor.
  * Pulse ISR callbacks only write BSRR (atomic), no FreeRTOS calls. */
@@ -110,17 +103,19 @@ static bool compute_psc_arr(uint32_t         freq_hz,
     assert(out_psc != NULL);
     assert(out_arr != NULL);
 
-    if (freq_hz == 0U)
+    if (freq_hz == 0U || freq_hz > HW_TIMER_FREQ_MAX_HZ)
     {
         return false;
     }
 
-    uint32_t max_arr = (width == HW_TIMER_WIDTH_32) ? 0xFFFFFFFFUL : 0xFFFFUL;
+    uint64_t max_arr = (width == HW_TIMER_WIDTH_32)
+                       ? HW_TIMER_ARR_MAX_32
+                       : HW_TIMER_ARR_MAX_16;
 
-    uint64_t period   = (uint64_t)HW_TIMER_CLOCK_HZ / freq_hz;
-    uint64_t psc_p1   = (period + max_arr) / ((uint64_t)max_arr + 1UL);
+    uint64_t period = (uint64_t)HW_TIMER_CLOCK_HZ / freq_hz;
+    uint64_t psc_p1 = (period + max_arr) / (max_arr + 1UL);
     if (psc_p1 == 0UL) psc_p1 = 1UL;
-    if (psc_p1 > 65536UL) return false;   /* PSC is always 16-bit */
+    if (psc_p1 > (uint64_t)HW_TIMER_PSC_MAX + 1UL) return false;
 
     uint64_t arr = period / psc_p1 - 1UL;
     if (arr > max_arr) return false;
@@ -270,6 +265,10 @@ uint8_t hw_timer_pwm_acquire(hw_timer_id_t id,
 
     if (e->state == STATE_PWM)
     {
+        /* Timer already running: e->psc/arr were stored by the first channel
+         * that opened this timer.  The newly computed psc/arr come from this
+         * call's freq_hz.  If they differ, the two channels want different
+         * frequencies -- impossible on a shared ARR. */
         if (e->psc != psc || e->arr != arr)
         {
             return ERR_HW_TIMER_FREQ_CONFLICT;

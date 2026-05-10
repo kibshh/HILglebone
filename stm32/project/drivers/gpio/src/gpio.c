@@ -95,6 +95,21 @@ void gpio_configure_input(const gpio_input_config_t *cfg)
     GPIO_SET_PULL (cfg->pin.port, cfg->pin.pin, (uint32_t)cfg->pull);
 }
 
+void gpio_configure_af(const gpio_af_config_t *cfg)
+{
+    assert(cfg != NULL);
+    assert(cfg->pin.port != NULL);
+    assert(cfg->af <= GPIO_AF_MAX);
+
+    GPIO_TypeDef *gpio = cfg->pin.port;
+    uint8_t       pin  = cfg->pin.pin;
+
+    GPIO_SET_AF   (gpio, pin, cfg->af);
+    GPIO_SET_SPEED(gpio, pin, (uint32_t)cfg->speed);
+    GPIO_SET_PULL (gpio, pin, (uint32_t)cfg->pull);
+    GPIO_SET_MODER(gpio, pin, GPIO_MODER_AF);
+}
+
 void gpio_reset_to_defaults(gpio_pin_t pin)
 {
     assert(pin.port != NULL);

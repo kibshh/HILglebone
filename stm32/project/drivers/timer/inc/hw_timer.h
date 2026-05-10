@@ -69,10 +69,29 @@ typedef enum
     HW_TIMER_WIDTH_32 = 1,  /* 32-bit ARR: TIM2, TIM5                      */
 } hw_timer_width_t;
 
+/* ── Timer clock & counter limits ────────────────────────────────── */
+
+/* All timers in the pool run at 84 MHz (see hw_timer.c for derivation). */
+#define HW_TIMER_CLOCK_HZ           84000000UL
+
+/* PSC is always 16-bit on STM32F4, regardless of timer width. */
+#define HW_TIMER_PSC_MAX            0xFFFFUL
+
+/* ARR limits by counter width. */
+#define HW_TIMER_ARR_MAX_16         0xFFFFUL
+#define HW_TIMER_ARR_MAX_32         0xFFFFFFFFUL
+
+/* Maximum meaningful PWM/pulse frequency.  At CLOCK/2 the period is
+ * 2 ticks (PSC=0, ARR=1), which is the minimum that still allows at
+ * least two CCR values (0% and 100%).  Higher frequencies would give
+ * ARR=0, leaving no duty-cycle resolution. */
+#define HW_TIMER_FREQ_MAX_HZ        (HW_TIMER_CLOCK_HZ / 2UL)
+
 /* ── Pulse-length caps ────────────────────────────────────────────── */
 
-#define HW_TIMER_MAX_PULSE_US_16    0xFFFFUL          /* 65 535 µs */
-#define HW_TIMER_MAX_PULSE_US_32    0xFFFFFFFFUL      /* ~71 min   */
+/* 1 µs/tick (PSC=83 at 84 MHz), ARR bounded by counter width. */
+#define HW_TIMER_MAX_PULSE_US_16    HW_TIMER_ARR_MAX_16   /* 65 535 µs */
+#define HW_TIMER_MAX_PULSE_US_32    HW_TIMER_ARR_MAX_32   /* ~71 min   */
 
 /* ── Per-timer channel capacity ───────────────────────────────────── */
 

@@ -8,8 +8,10 @@ target_include_directories(command PUBLIC inc)
 target_link_libraries(command PUBLIC
     shared
     protocol
+    hw_timer
     sim_i2c
     sim_digital_out
+    sim_pwm
     freertos_kernel
     cmsis
 )

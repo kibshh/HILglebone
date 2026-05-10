@@ -7,7 +7,7 @@
 
 #include "clock.h"
 #include "dispatcher.h"
-#include "helpers.h"
+#include "gpio.h"
 #include "protocol_parser.h"
 #include "uart.h"
 

@@ -129,7 +129,7 @@ Payload layout (generic framing -- inner bytes vary by protocol):
 | 0x03 | Digital output     | [digital-io-spec.md](digital-io-spec.md)    |
 | 0x04 | Digital input      | [digital-io-spec.md](digital-io-spec.md) (reserved) |
 | 0x05 | Analog output (DAC)| (TBD)                                       |
-| 0x06 | PWM output         | (TBD)                                       |
+| 0x06 | PWM output         | [pwm-spec.md](pwm-spec.md)                  |
 | 0x07 | Frequency output   | (TBD)                                       |
 | 0x08 | 1-Wire slave       | (TBD)                                       |
 | 0x09 | CAN frame source   | (TBD)                                       |

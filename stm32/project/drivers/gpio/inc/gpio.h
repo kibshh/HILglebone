@@ -87,6 +87,20 @@ typedef struct
     gpio_pull_t pull;
 } gpio_input_config_t;
 
+/* Configuration for gpio_configure_af() -- alternate-function mode.
+ * Used by peripherals that route through the GPIO matrix (TIM, I2C,
+ * SPI, UART, ...).  The AF number is pin+peripheral-specific; consult
+ * the STM32F401RE datasheet alternate-function table. */
+#define GPIO_AF_MAX    15U
+
+typedef struct
+{
+    gpio_pin_t   pin;
+    uint8_t      af;      /* 0..GPIO_AF_MAX */
+    gpio_speed_t speed;
+    gpio_pull_t  pull;
+} gpio_af_config_t;
+
 /* ── API ──────────────────────────────────────────────────────────── */
 
 /* Resolve a gpio_port_t enum to the CMSIS peripheral pointer.
@@ -109,6 +123,10 @@ void gpio_configure_output(const gpio_output_config_t *cfg,
 /* Configure a pin as a digital input with the chosen pull. */
 void gpio_configure_input(const gpio_input_config_t *cfg);
 
+/* Configure a pin in alternate-function mode (MODER = AF, AFR set).
+ * Used for timer/UART/SPI/I2C channels routed through the GPIO matrix. */
+void gpio_configure_af(const gpio_af_config_t *cfg);
+
 /* Reset a pin to power-on-reset state: floating input, no pull,
  * push-pull OTYPER (all MODER/OTYPER/PUPDR fields back to 0).
  * Use this when releasing a pin (e.g. on sensor stop). */
@@ -123,5 +141,8 @@ void gpio_reset(gpio_pin_t pin);
 /* Toggle the pin via ODR XOR.  Not atomic -- only call from a single
  * context that owns this pin (e.g. the heartbeat task). */
 void gpio_toggle(gpio_pin_t pin);
+
+/* Low-level register macros (MODER, OSPEEDR, PUPDR, OTYPER, AFR, BSRR). */
+#include "gpio_regs.h"
 
 #endif /* GPIO_H */
