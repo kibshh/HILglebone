@@ -49,10 +49,11 @@ from .constants import (
     DigitalLevel,
     DigitalOutputType,
     DigitalPort,
-    DigitalPulseRange,
+    HwTimerId,
     DigitalPull,
     DigitalSpeed,
     DigitalTimerKind,
+    PwmChannel,
     ErrorCode,
     FrameType,
     I2cAddressMode,
@@ -77,6 +78,14 @@ from .digital_io import (
     DigitalOutConfig,
     pack_digital_out_cfg,
     pack_digital_out_set_output,
+)
+from .pwm import (
+    PwmConfig,
+    pack_pwm_cfg,
+    pack_pwm_set_output,
+    PWM_DUTY_MAX,
+    PWM_FREQ_MAX_HZ,
+    PWM_FREQ_MIN_HZ,
 )
 from .frame import AckResponse, ErrorResponse, Frame, ParseError, ParseErrorReason
 from .i2c import I2cSensorConfig, pack_i2c_cfg, pack_i2c_set_output
@@ -129,7 +138,16 @@ __all__ = [
     "DigitalPull",
     "DigitalLevel",
     "DigitalTimerKind",
-    "DigitalPulseRange",
+    "HwTimerId",
+    # PWM backend
+    "PwmConfig",
+    "pack_pwm_cfg",
+    "pack_pwm_set_output",
+    "PWM_DUTY_MAX",
+    "PWM_FREQ_MIN_HZ",
+    "PWM_FREQ_MAX_HZ",
+    # PWM constants
+    "PwmChannel",
     # CRC utilities
     "CRC16_INIT",
     "crc16_ccitt",

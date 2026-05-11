@@ -130,9 +130,36 @@ class DigitalLevel(IntEnum):
 
 class DigitalTimerKind(IntEnum):
     SOFTWARE = 0   # FreeRTOS xTimer; ~1 ms resolution; unbounded duration
-    HARDWARE = 1   # Dedicated TIM reserved at setup; 1 µs resolution
+    HARDWARE = 1   # Specific HwTimerId reserved at setup; 1 µs resolution
 
-class DigitalPulseRange(IntEnum):
-    """Sub-pool selector for HW timer slots. Ignored when timer_kind=SOFTWARE."""
-    SHORT = 0   # TIM9/10/11 (16-bit); pulses up to 65 535 µs
-    LONG  = 1   # TIM2/5     (32-bit); pulses up to ~71 minutes
+# ── Unified hardware timer identifier ─────────────────────────────
+# Shared by DigitalOutConfig (timer_id) and PwmConfig (timer).
+# Values match hw_timer_id_t on the STM32 side.
+
+class HwTimerId(IntEnum):
+    """One of the seven hardware timers in the shared pool.
+
+    TIM2 and TIM5 have 32-bit counters:
+      - For pulses: durations up to ~71 minutes at 1 µs resolution.
+      - For PWM: better duty resolution at low frequencies.
+    All others are 16-bit (pulse cap 65 535 µs).
+    """
+    TIM2  = 0
+    TIM3  = 1
+    TIM4  = 2
+    TIM5  = 3
+    TIM9  = 4
+    TIM10 = 5
+    TIM11 = 6
+
+# ── PWM channel enumerant ──────────────────────────────────────────
+
+class PwmChannel(IntEnum):
+    """Valid channels depend on the chosen timer:
+    TIM2-5: CH1..CH4 | TIM9: CH1..CH2 | TIM10, TIM11: CH1 only.
+    The firmware rejects out-of-range channels at setup time.
+    """
+    CH1 = 1
+    CH2 = 2
+    CH3 = 3
+    CH4 = 4
