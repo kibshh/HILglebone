@@ -2,6 +2,7 @@
 
 #include <assert.h>
 
+#include "err_codes.h"
 #include "stm32f4xx.h"
 #include "FreeRTOS.h"
 #include "task.h"
@@ -80,7 +81,7 @@ void uart_set_rx_notify_task(TaskHandle_t task)
 
 /* ── Consumer-side (task context) ─────────────────────────────────── */
 
-bool uart_rx_pop(uint8_t *out)
+err_code_t uart_rx_pop(uint8_t *out)
 {
     assert(out != NULL);
 
@@ -88,22 +89,18 @@ bool uart_rx_pop(uint8_t *out)
 
     if (tail == rx_head)
     {
-        return false;   /* empty */
+        return ERR_CODE_EMPTY;
     }
 
     *out = rx_buf[tail];
     rx_tail = (uint16_t)((tail + 1U) & UART_RX_BUFFER_MASK);
-    return true;
+    return ERR_CODE_OK;
 }
 
-size_t uart_tx_push(const uint8_t *data, size_t len)
+err_code_t uart_tx_push(const uint8_t *data, size_t len, size_t *out_pushed)
 {
     assert(data != NULL || len == 0U);
-
-    if (len == 0U)
-    {
-        return 0;
-    }
+    assert(out_pushed != NULL);
 
     size_t pushed = 0;
 
@@ -126,7 +123,8 @@ size_t uart_tx_push(const uint8_t *data, size_t len)
         USART1->CR1 |= USART_CR1_TXEIE;
     }
 
-    return pushed;
+    *out_pushed = pushed;
+    return ERR_CODE_OK;
 }
 
 /* ── ISR ──────────────────────────────────────────────────────────── */

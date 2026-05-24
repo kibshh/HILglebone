@@ -24,6 +24,7 @@ typedef enum
     ERR_CODE_CONFLICT = 4,   /* resource already configured differently */
     ERR_CODE_TIMEOUT  = 5,   /* operation did not complete in time */
     ERR_CODE_INTERNAL = 6,   /* unexpected internal state */
+    ERR_CODE_EMPTY    = 7,   /* buffer/container had nothing to return (not a fault) */
 } err_code_t;
 
 #endif /* ERR_CODES_H */

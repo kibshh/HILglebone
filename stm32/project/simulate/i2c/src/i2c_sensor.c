@@ -6,6 +6,7 @@
 #include "FreeRTOS.h"
 
 #include "helpers.h"
+#include "err_codes.h"
 #include "protocol.h"
 #include "sensor_manager.h"
 

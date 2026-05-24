@@ -36,7 +36,8 @@
 #ifndef HW_TIMER_H
 #define HW_TIMER_H
 
-#include <stdbool.h>
+#include "err_codes.h"
+
 #include <stdint.h>
 
 #include "stm32f4xx.h"
@@ -101,12 +102,6 @@ typedef enum
 /* Maximum channel number for a specific timer (1-indexed). */
 uint8_t hw_timer_max_channel(hw_timer_id_t id);
 
-/* ── PWM-specific error codes ─────────────────────────────────────── */
-
-/* Timer already allocated for PWM at a different frequency.
- * Occupies the 0x60..0x6F slice of the protocol error space. */
-#define ERR_HW_TIMER_FREQ_CONFLICT  0x60U
-
 /* ── Pulse callback ───────────────────────────────────────────────── */
 
 /* Invoked from interrupt context when a one-shot pulse expires.
@@ -124,11 +119,11 @@ void hw_timer_init(void);
 /* Reserve a specific timer (`id`) for one-shot pulse use and bind it to
  * `user_token`.  The BBB picks the exact timer so it can coordinate with
  * PWM allocation (a timer cannot be shared between pulse and PWM modes).
- * Returns true on success; false if the timer is already in use or `id`
- * is out of range. */
-bool hw_timer_pulse_acquire(hw_timer_id_t       id,
-                            uint8_t             user_token,
-                            hw_timer_pulse_cb_t cb);
+ * Returns ERR_CODE_OK on success, ERR_CODE_ARG if `id` is out of range,
+ * ERR_CODE_BUSY if the timer is already allocated. */
+err_code_t hw_timer_pulse_acquire(hw_timer_id_t       id,
+                                  uint8_t             user_token,
+                                  hw_timer_pulse_cb_t cb);
 
 /* Release the timer bound to `user_token`.  Stops the counter, disables
  * the interrupt, and gates the clock.  No-op if not bound. */
@@ -140,9 +135,9 @@ uint32_t hw_timer_pulse_max_us(uint8_t user_token);
 
 /* Arm a one-shot pulse of `pulse_us` microseconds.  Restarting an
  * in-flight pulse cancels the old countdown.
- * Returns false if `user_token` is not bound or pulse_us is out of
- * range -- treat as ERR_INTERNAL in the caller. */
-bool hw_timer_pulse_start(uint8_t user_token, uint32_t pulse_us);
+ * Returns ERR_CODE_OK, ERR_CODE_ARG if not bound or pulse_us is
+ * out of range. */
+err_code_t hw_timer_pulse_start(uint8_t user_token, uint32_t pulse_us);
 
 /* ── PWM API (shared-by-channel, continuous) ──────────────────────── */
 
@@ -150,15 +145,15 @@ bool hw_timer_pulse_start(uint8_t user_token, uint32_t pulse_us);
  * - If FREE:  configures the timer (PSC+ARR), starts the counter, and
  *             sets the ref-count to 1.
  * - If already in PWM at the SAME frequency: increments ref-count.
- * - If in PWM at a DIFFERENT frequency: returns ERR_HW_TIMER_FREQ_CONFLICT.
- * - If in PULSE mode: returns ERR_PERIPHERAL_BUSY.
+ * - If in PWM at a DIFFERENT frequency: returns ERR_CODE_CONFLICT.
+ * - If in PULSE mode: returns ERR_CODE_BUSY.
+ * - Invalid id or unachievable frequency: returns ERR_CODE_ARG.
  *
  * `*out_arr` is filled with the auto-reload value so the caller can
- * compute CCR for a given duty cycle.
- * Returns ERR_SUCCESS or an error code. */
-uint8_t hw_timer_pwm_acquire(hw_timer_id_t id,
-                             uint32_t      freq_hz,
-                             uint32_t     *out_arr);
+ * compute CCR for a given duty cycle. */
+err_code_t hw_timer_pwm_acquire(hw_timer_id_t id,
+                                uint32_t      freq_hz,
+                                uint32_t     *out_arr);
 
 /* Release one PWM channel's reference on `id`.  Stops the timer and
  * gates the clock when the last channel is released. */

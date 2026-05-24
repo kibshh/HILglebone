@@ -7,6 +7,7 @@
 #include "gpio.h"
 #include "helpers.h"
 #include "hw_timer.h"
+#include "err_codes.h"
 #include "protocol.h"
 #include "sensor_manager.h"
 

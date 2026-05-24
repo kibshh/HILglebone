@@ -9,6 +9,8 @@
 #ifndef PROTOCOL_H
 #define PROTOCOL_H
 
+#include <stdint.h>
+
 /* ── Frame framing ────────────────────────────────────────────────── */
 
 #define PROTO_START_BYTE            0xAAU
@@ -59,25 +61,56 @@
 #define PROTO_SENSOR_ID_MIN         0x01U
 #define PROTO_SENSOR_ID_MAX         0xFFU
 
-/* ── Common error codes (0x00..0x3F) ─────────────────────────────── */
+/* ── Response codes ───────────────────────────────────────────────── */
+/*
+ * Every RSP_ACK / RSP_ERROR carries one of these values in error_code.
+ * Code space is sliced by protocol:
+ *   0x00..0x3F  common   |  0x40..0x5F  I2C
+ *   0x60..0x6F  PWM      |  0x80..0x8F  DAC
+ *
+ * MUST match ErrorCode in bbb/protocol/constants.py.
+ * Do NOT confuse with err_code_t (err_codes.h) — firmware-internal only.
+ */
 
-#define ERR_SUCCESS                 0x00U
-#define ERR_UNKNOWN_COMMAND         0x01U
-#define ERR_MALFORMED_PAYLOAD       0x02U
-#define ERR_BAD_CRC                 0x03U
-#define ERR_PROTOCOL_UNSUPPORTED    0x04U
-#define ERR_OUT_OF_RESOURCES        0x05U
-#define ERR_INVALID_SENSOR_ID       0x06U
-#define ERR_INVALID_PARAMETER       0x07U
-#define ERR_PERIPHERAL_BUSY         0x08U
-#define ERR_PIN_CONFLICT            0x09U
-#define ERR_UNSUPPORTED_FEATURE     0x0AU
-#define ERR_INTERNAL                0x0BU
+typedef uint8_t proto_code_t;
 
-/* Protocol-specific error codes live in each protocol's own header and
- * carve their own slice out of the 0x40..0xBF range (per the spec):
- *   I2C -> 0x40..0x5F in i2c_sensor.h
- *   ... future protocols extend here. */
+typedef enum
+{
+    /* ── Common (0x00..0x0B) ──────────────────────────────────────── */
+    PROTO_CODE_OK               = 0x00U,
+    PROTO_CODE_UNKNOWN_CMD      = 0x01U,
+    PROTO_CODE_MALFORMED        = 0x02U,
+    PROTO_CODE_BAD_CRC          = 0x03U,
+    PROTO_CODE_UNSUPPORTED      = 0x04U,
+    PROTO_CODE_NO_RESOURCES     = 0x05U,
+    PROTO_CODE_INVALID_SENSOR   = 0x06U,
+    PROTO_CODE_INVALID_PARAM    = 0x07U,
+    PROTO_CODE_PERIPHERAL_BUSY  = 0x08U,
+    PROTO_CODE_PIN_CONFLICT     = 0x09U,
+    PROTO_CODE_NOT_IMPLEMENTED  = 0x0AU,
+    PROTO_CODE_INTERNAL         = 0x0BU,
+
+    /* ── I2C-specific (0x40..0x49) ────────────────────────────────── */
+    PROTO_CODE_I2C_NO_FREE_PERIPHERAL  = 0x40U,
+    PROTO_CODE_I2C_CLOCK_UNSUPPORTED   = 0x41U,
+    PROTO_CODE_I2C_ADDR_CONFLICT       = 0x42U,
+    PROTO_CODE_I2C_ADDR_RESERVED       = 0x43U,
+    PROTO_CODE_I2C_REGMAP_TOO_LARGE    = 0x44U,
+    PROTO_CODE_I2C_BAD_ADDR_MODE       = 0x45U,
+    PROTO_CODE_I2C_REGISTER_OOB        = 0x46U,
+    PROTO_CODE_I2C_STRETCH_EXCEEDS_BUS = 0x47U,
+    PROTO_CODE_I2C_SMBUS_REQUIRED      = 0x48U,
+    PROTO_CODE_I2C_UNSUPPORTED         = 0x49U,
+
+    /* ── PWM-specific (0x60..0x61) ────────────────────────────────── */
+    PROTO_CODE_PWM_FREQ_CONFLICT    = 0x60U,
+    PROTO_CODE_PWM_CHANNEL_IN_USE   = 0x61U,
+
+    /* ── DAC-specific (0x80..0x82) ────────────────────────────────── */
+    PROTO_CODE_DAC_PIN_MISMATCH     = 0x80U,
+    PROTO_CODE_DAC_CLOCK_MISMATCH   = 0x81U,
+    PROTO_CODE_DAC_CHANNEL_IN_USE   = 0x82U,
+} proto_code_enum_t;
 
 /* ── Generic command-payload layouts ─────────────────────────────── */
 

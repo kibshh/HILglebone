@@ -17,19 +17,6 @@
 
 #include <stdint.h>
 
-/* ── I2C-specific error codes (slice 0x40..0x5F of the protocol range) ── */
-
-#define ERR_I2C_NO_FREE_PERIPHERAL  0x40U
-#define ERR_I2C_CLOCK_UNSUPPORTED   0x41U
-#define ERR_I2C_ADDR_CONFLICT       0x42U
-#define ERR_I2C_ADDR_RESERVED       0x43U
-#define ERR_I2C_REGMAP_TOO_LARGE    0x44U
-#define ERR_I2C_BAD_ADDR_MODE       0x45U
-#define ERR_I2C_REGISTER_OOB        0x46U
-#define ERR_I2C_STRETCH_EXCEEDS_BUS 0x47U
-#define ERR_I2C_SMBUS_REQUIRED      0x48U
-#define ERR_I2C_UNSUPPORTED_FEATURE 0x49U
-
 /* ── Capacity ─────────────────────────────────────────────────────── */
 
 /* STM32F401RE has three I2C peripherals (I2C1/2/3), all wired to the same
@@ -121,14 +108,14 @@ void i2c_sensor_init(void);
  *   `cfg_len` = length of that slice
  *   `out_sensor_id` = filled with the newly-allocated id on success, or
  *                     PROTO_SENSOR_ID_NONE on failure
- * Returns ERR_SUCCESS or a common/I2C-specific error code. */
+ * Returns PROTO_CODE_OK or a common/I2C-specific error code. */
 uint8_t i2c_sensor_setup(const uint8_t *cfg, uint16_t cfg_len, uint8_t *out_sensor_id);
 
 /* Handle CMD_SET_OUTPUT for an I2C sensor.
  *   `internal_id`  = index returned by i2c_sensor_setup
  *   `values`       = payload bytes starting AFTER the generic sensor_id byte
  *   `values_len`   = length of that slice
- * Returns ERR_SUCCESS or an error code. */
+ * Returns PROTO_CODE_OK or an error code. */
 uint8_t i2c_sensor_set_output(uint8_t internal_id, const uint8_t *values, uint16_t values_len);
 
 /* Handle CMD_STOP_SENSOR for an I2C sensor. Frees peripheral slot + reg map. */

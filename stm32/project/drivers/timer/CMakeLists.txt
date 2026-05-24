@@ -5,7 +5,6 @@ add_library(hw_timer STATIC
 target_include_directories(hw_timer PUBLIC inc)
 
 target_link_libraries(hw_timer PUBLIC
-    protocol
     shared
     cmsis
 )

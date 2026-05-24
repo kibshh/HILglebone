@@ -3,6 +3,7 @@
 #include <assert.h>
 
 #include "crc16.h"
+#include "err_codes.h"
 #include "protocol.h"
 #include "uart.h"
 
@@ -46,17 +47,23 @@ static size_t build_frame(uint8_t       *out,
  * the whole frame, we report failure -- the caller can decide to back off
  * or drop; we never emit a partial frame because the peer would reject it
  * on CRC mismatch anyway. */
-static bool push_frame(const uint8_t *frame, size_t len)
+static err_code_t push_frame(const uint8_t *frame, size_t len)
 {
     assert(frame != NULL || len == 0U);
 
-    return uart_tx_push(frame, len) == len;
+    size_t     pushed = 0;
+    err_code_t err    = uart_tx_push(frame, len, &pushed);
+    if (err != ERR_CODE_OK)
+    {
+        return err;
+    }
+    return (pushed == len) ? ERR_CODE_OK : ERR_CODE_RESOURCES;
 }
 
-bool protocol_send_ack(uint8_t cmd_type,
-                       uint8_t error_code,
-                       uint8_t sensor_id,
-                       uint8_t seq)
+err_code_t protocol_send_ack(uint8_t cmd_type,
+                             uint8_t error_code,
+                             uint8_t sensor_id,
+                             uint8_t seq)
 {
     uint8_t frame[PROTO_FRAME_OVERHEAD + RSP_ACK_PAYLOAD_SIZE];
     uint8_t payload[RSP_ACK_PAYLOAD_SIZE];
@@ -74,9 +81,9 @@ bool protocol_send_ack(uint8_t cmd_type,
     return push_frame(frame, n);
 }
 
-bool protocol_send_error(uint8_t sensor_id,
-                         uint8_t error_code,
-                         uint8_t seq)
+err_code_t protocol_send_error(uint8_t sensor_id,
+                               uint8_t error_code,
+                               uint8_t seq)
 {
     uint8_t frame[PROTO_FRAME_OVERHEAD + RSP_ERROR_PAYLOAD_SIZE];
     uint8_t payload[RSP_ERROR_PAYLOAD_SIZE];

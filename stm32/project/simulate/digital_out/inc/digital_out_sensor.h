@@ -92,7 +92,7 @@ void digital_out_sensor_init(void);
  *   `cfg_len`       = length of that slice
  *   `out_sensor_id` = filled with the newly-allocated id on success, or
  *                     PROTO_SENSOR_ID_NONE on failure
- * Returns ERR_SUCCESS or a common error code. */
+ * Returns PROTO_CODE_OK or a common error code. */
 uint8_t digital_out_sensor_setup(const uint8_t *cfg,
                                  uint16_t       cfg_len,
                                  uint8_t       *out_sensor_id);
@@ -101,7 +101,7 @@ uint8_t digital_out_sensor_setup(const uint8_t *cfg,
  *   `internal_id`  = index returned by digital_out_sensor_setup
  *   `values`       = payload bytes starting AFTER the generic sensor_id byte
  *   `values_len`   = length of that slice
- * Returns ERR_SUCCESS or an error code. */
+ * Returns PROTO_CODE_OK or an error code. */
 uint8_t digital_out_sensor_set_output(uint8_t        internal_id,
                                       const uint8_t *values,
                                       uint16_t       values_len);
