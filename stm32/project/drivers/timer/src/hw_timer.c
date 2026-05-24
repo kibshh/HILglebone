@@ -105,7 +105,7 @@ static err_code_t compute_psc_arr(uint32_t         freq_hz,
 
     if (freq_hz == 0U || freq_hz > HW_TIMER_FREQ_MAX_HZ)
     {
-        return ERR_CODE_ARG;
+        return ERR_INVALID_PARAMETER;
     }
 
     uint64_t max_arr = (width == HW_TIMER_WIDTH_32)
@@ -115,14 +115,14 @@ static err_code_t compute_psc_arr(uint32_t         freq_hz,
     uint64_t period = (uint64_t)HW_TIMER_CLOCK_HZ / freq_hz;
     uint64_t psc_p1 = (period + max_arr) / (max_arr + 1UL);
     if (psc_p1 == 0UL) psc_p1 = 1UL;
-    if (psc_p1 > (uint64_t)HW_TIMER_PSC_MAX + 1UL) return ERR_CODE_ARG;
+    if (psc_p1 > (uint64_t)HW_TIMER_PSC_MAX + 1UL) return ERR_INVALID_PARAMETER;
 
     uint64_t arr = period / psc_p1 - 1UL;
-    if (arr > max_arr) return ERR_CODE_ARG;
+    if (arr > max_arr) return ERR_INVALID_PARAMETER;
 
     *out_psc = (uint32_t)(psc_p1 - 1UL);
     *out_arr = (uint32_t)arr;
-    return ERR_CODE_OK;
+    return ERR_SUCCESS;
 }
 
 /* ── Pulse helpers ────────────────────────────────────────────────── */
@@ -170,10 +170,10 @@ err_code_t hw_timer_pulse_acquire(hw_timer_id_t       id,
 {
     assert(cb != NULL);
 
-    if (id >= HW_TIMER_COUNT)        return ERR_CODE_ARG;
+    if (id >= HW_TIMER_COUNT)        return ERR_INVALID_PARAMETER;
 
     hw_timer_entry_t *e = &timers[id];
-    if (e->state != STATE_FREE)      return ERR_CODE_BUSY;
+    if (e->state != STATE_FREE)      return ERR_PERIPHERAL_BUSY;
 
     clock_enable(e);
     pulse_configure_idle(e);
@@ -184,7 +184,7 @@ err_code_t hw_timer_pulse_acquire(hw_timer_id_t       id,
 
     NVIC_SetPriority(e->irq, HW_TIMER_IRQ_PRIO);
     NVIC_EnableIRQ(e->irq);
-    return ERR_CODE_OK;
+    return ERR_SUCCESS;
 }
 
 void hw_timer_pulse_release(uint8_t user_token)
@@ -218,11 +218,11 @@ uint32_t hw_timer_pulse_max_us(uint8_t user_token)
 err_code_t hw_timer_pulse_start(uint8_t user_token, uint32_t pulse_us)
 {
     hw_timer_entry_t *e = find_pulse_entry(user_token);
-    if (e == NULL) return ERR_CODE_ARG;
+    if (e == NULL) return ERR_INVALID_PARAMETER;
 
     if (pulse_us == 0U || pulse_us > hw_timer_pulse_max_us(user_token))
     {
-        return ERR_CODE_ARG;
+        return ERR_INVALID_PARAMETER;
     }
 
     TIM_TypeDef *tim = e->tim;
@@ -235,7 +235,7 @@ err_code_t hw_timer_pulse_start(uint8_t user_token, uint32_t pulse_us)
     tim->SR    = 0U;
     tim->DIER  = TIM_DIER_UIE;
     tim->CR1  |= TIM_CR1_CEN;
-    return ERR_CODE_OK;
+    return ERR_SUCCESS;
 }
 
 err_code_t hw_timer_pwm_acquire(hw_timer_id_t id,
@@ -244,17 +244,17 @@ err_code_t hw_timer_pwm_acquire(hw_timer_id_t id,
 {
     assert(out_arr != NULL);
 
-    if (id >= HW_TIMER_COUNT) return ERR_CODE_ARG;
+    if (id >= HW_TIMER_COUNT) return ERR_INVALID_PARAMETER;
 
     hw_timer_entry_t *e = &timers[id];
 
-    if (e->state == STATE_PULSE) return ERR_CODE_BUSY;
+    if (e->state == STATE_PULSE) return ERR_PERIPHERAL_BUSY;
 
     uint32_t psc;
     uint32_t arr;
-    if (compute_psc_arr(freq_hz, e->width, &psc, &arr) != ERR_CODE_OK)
+    if (compute_psc_arr(freq_hz, e->width, &psc, &arr) != ERR_SUCCESS)
     {
-        return ERR_CODE_ARG;
+        return ERR_INVALID_PARAMETER;
     }
 
     if (e->state == STATE_PWM)
@@ -265,11 +265,11 @@ err_code_t hw_timer_pwm_acquire(hw_timer_id_t id,
          * frequencies -- impossible on a shared ARR. */
         if (e->psc != psc || e->arr != arr)
         {
-            return ERR_CODE_CONFLICT;
+            return ERR_PWM_FREQ_CONFLICT;
         }
         e->pwm_ref_count++;
         *out_arr = e->arr;
-        return ERR_CODE_OK;
+        return ERR_SUCCESS;
     }
 
     /* STATE_FREE: configure and start. */
@@ -290,7 +290,7 @@ err_code_t hw_timer_pwm_acquire(hw_timer_id_t id,
     e->state         = STATE_PWM;
 
     *out_arr = arr;
-    return ERR_CODE_OK;
+    return ERR_SUCCESS;
 }
 
 void hw_timer_pwm_release(hw_timer_id_t id)

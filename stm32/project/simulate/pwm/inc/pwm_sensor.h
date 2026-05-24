@@ -15,6 +15,7 @@
 
 #include <stdint.h>
 
+#include "err_codes.h"
 #include "hw_timer.h"
 
 /* ── Capacity ─────────────────────────────────────────────────────── */
@@ -74,23 +75,23 @@ void pwm_sensor_init(void);
  *   `cfg_len`       = length of that slice
  *   `out_sensor_id` = filled with the newly-allocated id on success, or
  *                     PROTO_SENSOR_ID_NONE on failure
- * Returns PROTO_CODE_OK or a common / PWM-specific error code. */
-uint8_t pwm_sensor_setup(const uint8_t *cfg,
-                         uint16_t       cfg_len,
-                         uint8_t       *out_sensor_id);
+ * Returns ERR_SUCCESS or a common / PWM-specific error code. */
+err_code_t pwm_sensor_setup(const uint8_t *cfg,
+                             uint16_t       cfg_len,
+                             uint8_t       *out_sensor_id);
 
 /* Handle CMD_SET_OUTPUT for a PWM sensor.  Updates duty cycle only;
  * frequency is pinned at setup time.
  *   `internal_id` = index returned by pwm_sensor_setup
  *   `values`      = payload bytes starting AFTER the generic sensor_id byte
  *   `values_len`  = length of that slice
- * Returns PROTO_CODE_OK or an error code. */
-uint8_t pwm_sensor_set_output(uint8_t        internal_id,
-                              const uint8_t *values,
-                              uint16_t       values_len);
+ * Returns ERR_SUCCESS or an error code. */
+err_code_t pwm_sensor_set_output(uint8_t        internal_id,
+                                  const uint8_t *values,
+                                  uint16_t       values_len);
 
 /* Handle CMD_STOP_SENSOR.  Disables the PWM channel, reverts the pin to
  * floating input, and releases the timer back to the shared hw_timer pool. */
-uint8_t pwm_sensor_stop(uint8_t internal_id);
+err_code_t pwm_sensor_stop(uint8_t internal_id);
 
 #endif /* PWM_SENSOR_H */

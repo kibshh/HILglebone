@@ -106,7 +106,7 @@ err_code_t spi_master_init(spi_master_periph_t periph,
 {
     if (periph >= SPI_MASTER_COUNT || clock_hz == 0U || mode > SPI_MASTER_MODE_MAX)
     {
-        return ERR_CODE_ARG;
+        return ERR_INVALID_PARAMETER;
     }
 
     spi_state_t *s = &states[periph];
@@ -140,14 +140,14 @@ err_code_t spi_master_init(spi_master_periph_t periph,
     NVIC_SetPriority(s->irq, SPI_IRQ_PRIORITY);
     NVIC_EnableIRQ(s->irq);
 
-    return ERR_CODE_OK;
+    return ERR_SUCCESS;
 }
 
 err_code_t spi_master_deinit(spi_master_periph_t periph)
 {
     if (periph >= SPI_MASTER_COUNT)
     {
-        return ERR_CODE_ARG;
+        return ERR_INVALID_PARAMETER;
     }
 
     spi_state_t *s = &states[periph];
@@ -162,7 +162,7 @@ err_code_t spi_master_deinit(spi_master_periph_t periph)
     s->initialized = false;
     s->busy        = false;
 
-    return ERR_CODE_OK;
+    return ERR_SUCCESS;
 }
 
 err_code_t spi_master_write(spi_master_periph_t    periph,
@@ -175,9 +175,9 @@ err_code_t spi_master_write(spi_master_periph_t    periph,
     assert(len > 0U);
     assert(cb  != NULL);
 
-    if (periph >= SPI_MASTER_COUNT)      return ERR_CODE_ARG;
-    if (!states[periph].initialized)     return ERR_CODE_ARG;
-    if (states[periph].busy)             return ERR_CODE_BUSY;
+    if (periph >= SPI_MASTER_COUNT)      return ERR_INVALID_PARAMETER;
+    if (!states[periph].initialized)     return ERR_INVALID_PARAMETER;
+    if (states[periph].busy)             return ERR_PERIPHERAL_BUSY;
 
     spi_state_t *s = &states[periph];
 
@@ -202,7 +202,7 @@ err_code_t spi_master_write(spi_master_periph_t    periph,
      * otherwise the peripheral raises an overrun (OVR) error. */
     s->spi->CR2 |= (SPI_CR2_TXEIE | SPI_CR2_RXNEIE);
 
-    return ERR_CODE_OK;
+    return ERR_SUCCESS;
 }
 
 /* ── ISR ──────────────────────────────────────────────────────────── */

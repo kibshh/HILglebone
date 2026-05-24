@@ -119,8 +119,8 @@ void hw_timer_init(void);
 /* Reserve a specific timer (`id`) for one-shot pulse use and bind it to
  * `user_token`.  The BBB picks the exact timer so it can coordinate with
  * PWM allocation (a timer cannot be shared between pulse and PWM modes).
- * Returns ERR_CODE_OK on success, ERR_CODE_ARG if `id` is out of range,
- * ERR_CODE_BUSY if the timer is already allocated. */
+ * Returns ERR_SUCCESS on success, ERR_INVALID_PARAMETER if `id` is out of range,
+ * ERR_PERIPHERAL_BUSY if the timer is already allocated. */
 err_code_t hw_timer_pulse_acquire(hw_timer_id_t       id,
                                   uint8_t             user_token,
                                   hw_timer_pulse_cb_t cb);
@@ -135,7 +135,7 @@ uint32_t hw_timer_pulse_max_us(uint8_t user_token);
 
 /* Arm a one-shot pulse of `pulse_us` microseconds.  Restarting an
  * in-flight pulse cancels the old countdown.
- * Returns ERR_CODE_OK, ERR_CODE_ARG if not bound or pulse_us is
+ * Returns ERR_SUCCESS, ERR_INVALID_PARAMETER if not bound or pulse_us is
  * out of range. */
 err_code_t hw_timer_pulse_start(uint8_t user_token, uint32_t pulse_us);
 
@@ -145,9 +145,9 @@ err_code_t hw_timer_pulse_start(uint8_t user_token, uint32_t pulse_us);
  * - If FREE:  configures the timer (PSC+ARR), starts the counter, and
  *             sets the ref-count to 1.
  * - If already in PWM at the SAME frequency: increments ref-count.
- * - If in PWM at a DIFFERENT frequency: returns ERR_CODE_CONFLICT.
- * - If in PULSE mode: returns ERR_CODE_BUSY.
- * - Invalid id or unachievable frequency: returns ERR_CODE_ARG.
+ * - If in PWM at a DIFFERENT frequency: returns ERR_PWM_FREQ_CONFLICT.
+ * - If in PULSE mode: returns ERR_PERIPHERAL_BUSY.
+ * - Invalid id or unachievable frequency: returns ERR_INVALID_PARAMETER.
  *
  * `*out_arr` is filled with the auto-reload value so the caller can
  * compute CCR for a given duty cycle. */

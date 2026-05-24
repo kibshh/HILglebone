@@ -125,11 +125,11 @@ the timer, the timer itself is stopped and its clock gated.
 
 | Code | Name | When |
 |------|------|------|
-| 0x02 | `ERR_MALFORMED_PAYLOAD` | Payload shorter than 11 bytes (setup) or 2 bytes (set-output) |
-| 0x07 | `ERR_INVALID_PARAMETER` | `port`, `pin`, `af`, `timer`, `channel`, `freq_hz` or `duty_pct_x100` out of range |
-| 0x09 | `ERR_PIN_CONFLICT` | (port, pin) already owned by another sensor |
-| 0x08 | `ERR_PERIPHERAL_BUSY` | `timer` is currently allocated for one-shot pulses (digital-out sensor) |
-| 0x60 | `ERR_PWM_FREQ_CONFLICT` | `timer` already running at a different frequency (sharing constraint) |
+| 0x02 | `ERR_MALFORMED_PAYLOAD`        | Payload shorter than 11 bytes (setup) or 2 bytes (set-output) |
+| 0x07 | `ERR_INVALID_PARAMETER`    | `port`, `pin`, `af`, `timer`, `channel`, `freq_hz` or `duty_pct_x100` out of range |
+| 0x09 | `ERR_PIN_CONFLICT`     | (port, pin) already owned by another sensor |
+| 0x08 | `ERR_PERIPHERAL_BUSY`  | `timer` is currently allocated for one-shot pulses (digital-out sensor) |
+| 0x60 | `ERR_PWM_FREQ_CONFLICT`| `timer` already running at a different frequency (sharing constraint) |
 | 0x61 | `ERR_PWM_CHANNEL_IN_USE` | (timer, channel) pair already owned by another PWM sensor |
 
 ## 7. Worked example — 50 Hz servo signal

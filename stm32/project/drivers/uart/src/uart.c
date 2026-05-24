@@ -89,12 +89,12 @@ err_code_t uart_rx_pop(uint8_t *out)
 
     if (tail == rx_head)
     {
-        return ERR_CODE_EMPTY;
+        return ERR_EMPTY;
     }
 
     *out = rx_buf[tail];
     rx_tail = (uint16_t)((tail + 1U) & UART_RX_BUFFER_MASK);
-    return ERR_CODE_OK;
+    return ERR_SUCCESS;
 }
 
 err_code_t uart_tx_push(const uint8_t *data, size_t len, size_t *out_pushed)
@@ -124,7 +124,7 @@ err_code_t uart_tx_push(const uint8_t *data, size_t len, size_t *out_pushed)
     }
 
     *out_pushed = pushed;
-    return ERR_CODE_OK;
+    return ERR_SUCCESS;
 }
 
 /* ── ISR ──────────────────────────────────────────────────────────── */

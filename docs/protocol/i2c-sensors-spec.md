@@ -138,7 +138,7 @@ limits on an F401RE:
 | 256              | ~256 B + overhead | Typical for most sensors                       |
 | 1024             | ~1 KiB            | EEPROM emulation territory                     |
 | 4096             | ~4 KiB            | Hitting diminishing returns; use SPI flash sim |
-| > 8192           | rejected          | Returns `ERR_I2C_REGMAP_TOO_LARGE`             |
+| > 8192           | rejected          | Returns `ERR_I2C_REGMAP_TOO_LARGE`      |
 
 ### 3.5 Initial register state
 
@@ -211,18 +211,18 @@ Protocol-scoped codes occupy range `0x40..0x5F` (the "I2C slice" of
 
 | Code | Name                             | Meaning                                                                   |
 |------|----------------------------------|---------------------------------------------------------------------------|
-| 0x40 | `ERR_I2C_NO_FREE_PERIPHERAL`     | All I2C peripherals are already bound to active sensors                   |
-| 0x41 | `ERR_I2C_CLOCK_UNSUPPORTED`      | `clock_hz` not achievable on this peripheral                              |
-| 0x42 | `ERR_I2C_ADDR_CONFLICT`          | `primary_addr` / `secondary_addr` collides with another sensor            |
-| 0x43 | `ERR_I2C_ADDR_RESERVED`          | 7-bit: address in reserved range (0x00..0x07 or 0x78..0x7F) without       |
-|      |                                  | the corresponding flag; 10-bit: address > 0x3FF                           |
-| 0x44 | `ERR_I2C_REGMAP_TOO_LARGE`       | `register_count` exceeds the shared register-storage budget               |
-| 0x45 | `ERR_I2C_BAD_ADDR_MODE`          | `address_mode` out of range or `secondary_addr != 0` in 10-bit mode       |
-| 0x46 | `ERR_I2C_REGISTER_OOB`           | `CMD_SET_OUTPUT` or preset: `reg_start + values_len` exceeds               |
-|      |                                  | `register_count`                                                          |
-| 0x47 | `ERR_I2C_STRETCH_EXCEEDS_BUS`    | `response_delay_us` or `clock_stretch_max_us` violates `clock_hz` budget  |
-| 0x48 | `ERR_I2C_SMBUS_REQUIRED`         | `pec_required` set but `smbus_mode` not set                               |
-| 0x49 | `ERR_I2C_UNSUPPORTED_FEATURE`    | Field structurally valid but not implemented (e.g. 10-bit with dual addr) |
+| 0x40 | `ERR_I2C_NO_FREE_PERIPHERAL`  | All I2C peripherals are already bound to active sensors                   |
+| 0x41 | `ERR_I2C_CLOCK_UNSUPPORTED`   | `clock_hz` not achievable on this peripheral                              |
+| 0x42 | `ERR_I2C_ADDR_CONFLICT`       | `primary_addr` / `secondary_addr` collides with another sensor            |
+| 0x43 | `ERR_I2C_ADDR_RESERVED`       | 7-bit: address in reserved range (0x00..0x07 or 0x78..0x7F) without       |
+|      |                                      | the corresponding flag; 10-bit: address > 0x3FF                           |
+| 0x44 | `ERR_I2C_REGMAP_TOO_LARGE`    | `register_count` exceeds the shared register-storage budget               |
+| 0x45 | `ERR_I2C_BAD_ADDR_MODE`       | `address_mode` out of range or `secondary_addr != 0` in 10-bit mode       |
+| 0x46 | `ERR_I2C_REGISTER_OOB`        | `CMD_SET_OUTPUT` or preset: `reg_start + values_len` exceeds              |
+|      |                                      | `register_count`                                                          |
+| 0x47 | `ERR_I2C_STRETCH_EXCEEDS_BUS` | `response_delay_us` or `clock_stretch_max_us` violates `clock_hz` budget  |
+| 0x48 | `ERR_I2C_SMBUS_REQUIRED`      | `pec_required` set but `smbus_mode` not set                               |
+| 0x49 | `ERR_I2C_UNSUPPORTED`         | Field structurally valid but not implemented (e.g. 10-bit with dual addr) |
 
 ## 7. Worked example: emulating a BME280
 
@@ -279,7 +279,7 @@ CMD_SETUP_SENSOR payload:
 ```
 
 STM32 responds: `RSP_ACK` with payload
-`[cmd_type=0x01, error_code=SUCCESS, sensor_id=0x01]` -- the id `0x01` is the
+`[cmd_type=0x01, error_code=ERR_SUCCESS, sensor_id=0x01]` -- the id `0x01` is the
 handle the BBB will use in all subsequent messages for this sensor. The
 first time the DUT reads `0xD0`, it sees `0x60` and the chip is "detected".
 

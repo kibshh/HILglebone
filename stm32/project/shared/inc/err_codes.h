@@ -1,30 +1,50 @@
-/**
- * Firmware-internal error codes.
- *
- * Used by low-level drivers to communicate failure reasons without
- * depending on the wire protocol error code space.  At the protocol
- * boundary (sensor backends, dispatcher) these are mapped to the
- * appropriate ERR_* protocol codes before being returned to the BBB.
- *
- * Asserts catch programmer errors (NULL pointers, out-of-range enum
- * values that were validated by the caller).  err_code_t covers
- * runtime failures (resource exhaustion, hardware busy, etc.) that
- * callers must handle.
- */
-
 #ifndef ERR_CODES_H
 #define ERR_CODES_H
 
+/* Unified error / status codes.
+ *
+ * Values are the wire-protocol error_code byte sent in RSP_ACK.
+ * Every driver and sensor backend returns err_code_t directly — no
+ * translation layer is needed between firmware internals and the wire. */
+
 typedef enum
 {
-    ERR_CODE_OK       = 0,   /* operation completed successfully */
-    ERR_CODE_ARG      = 1,   /* invalid argument (runtime-checkable value from external source) */
-    ERR_CODE_BUSY     = 2,   /* resource is already in use */
-    ERR_CODE_RESOURCES= 3,   /* no free slots / memory */
-    ERR_CODE_CONFLICT = 4,   /* resource already configured differently */
-    ERR_CODE_TIMEOUT  = 5,   /* operation did not complete in time */
-    ERR_CODE_INTERNAL = 6,   /* unexpected internal state */
-    ERR_CODE_EMPTY    = 7,   /* buffer/container had nothing to return (not a fault) */
+    /* ── Common (0x00..0x0D) ──────────────────────────────────────── */
+    ERR_SUCCESS                 = 0x00U,
+    ERR_UNKNOWN_CMD             = 0x01U,
+    ERR_MALFORMED_PAYLOAD       = 0x02U,
+    ERR_BAD_CRC                 = 0x03U,
+    ERR_UNSUPPORTED             = 0x04U,
+    ERR_OUT_OF_RESOURCES        = 0x05U,
+    ERR_INVALID_SENSOR_ID       = 0x06U,
+    ERR_INVALID_PARAMETER       = 0x07U,
+    ERR_PERIPHERAL_BUSY         = 0x08U,
+    ERR_PIN_CONFLICT            = 0x09U,
+    ERR_NOT_IMPLEMENTED         = 0x0AU,
+    ERR_INTERNAL                = 0x0BU,
+    ERR_TIMEOUT                 = 0x0CU,
+    ERR_EMPTY                   = 0x0DU,
+
+    /* ── I2C-specific (0x40..0x49) ────────────────────────────────── */
+    ERR_I2C_NO_FREE_PERIPHERAL  = 0x40U,
+    ERR_I2C_CLOCK_UNSUPPORTED   = 0x41U,
+    ERR_I2C_ADDR_CONFLICT       = 0x42U,
+    ERR_I2C_ADDR_RESERVED       = 0x43U,
+    ERR_I2C_REGMAP_TOO_LARGE    = 0x44U,
+    ERR_I2C_BAD_ADDR_MODE       = 0x45U,
+    ERR_I2C_REGISTER_OOB        = 0x46U,
+    ERR_I2C_STRETCH_EXCEEDS_BUS = 0x47U,
+    ERR_I2C_SMBUS_REQUIRED      = 0x48U,
+    ERR_I2C_UNSUPPORTED         = 0x49U,
+
+    /* ── PWM-specific (0x60..0x61) ────────────────────────────────── */
+    ERR_PWM_FREQ_CONFLICT       = 0x60U,
+    ERR_PWM_CHANNEL_IN_USE      = 0x61U,
+
+    /* ── DAC-specific (0x80..0x82) ────────────────────────────────── */
+    ERR_DAC_PIN_MISMATCH        = 0x80U,
+    ERR_DAC_CLOCK_MISMATCH      = 0x81U,
+    ERR_DAC_CHANNEL_IN_USE      = 0x82U,
 } err_code_t;
 
 #endif /* ERR_CODES_H */

@@ -12,6 +12,7 @@ target_link_libraries(command PUBLIC
     sim_i2c
     sim_digital_out
     sim_pwm
+    sim_dac
     freertos_kernel
     cmsis
 )

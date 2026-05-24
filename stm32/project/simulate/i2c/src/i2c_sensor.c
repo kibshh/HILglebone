@@ -74,9 +74,9 @@ static void free_slot(uint8_t idx)
 /* Validate the I2C cfg block. On success returns ERR_SUCCESS and fills
  * `out`; on failure returns an error code and `out` is left untouched.
  * `cfg` is the slice after the generic protocol_id byte. */
-static uint8_t validate_cfg(const uint8_t      *cfg,
-                            uint16_t            cfg_len,
-                            i2c_sensor_state_t *out)
+static err_code_t validate_cfg(const uint8_t      *cfg,
+                               uint16_t            cfg_len,
+                               i2c_sensor_state_t *out)
 {
     assert(out != NULL);
     assert(cfg != NULL || cfg_len == 0U);
@@ -194,7 +194,7 @@ void i2c_sensor_init(void)
     }
 }
 
-uint8_t i2c_sensor_setup(const uint8_t *cfg, uint16_t cfg_len, uint8_t *out_sensor_id)
+err_code_t i2c_sensor_setup(const uint8_t *cfg, uint16_t cfg_len, uint8_t *out_sensor_id)
 {
     assert(cfg != NULL || cfg_len == 0U);
     assert(out_sensor_id != NULL);
@@ -209,7 +209,7 @@ uint8_t i2c_sensor_setup(const uint8_t *cfg, uint16_t cfg_len, uint8_t *out_sens
 
     i2c_sensor_state_t *s = &i2c_sensor_states[idx];
 
-    uint8_t err = validate_cfg(cfg, cfg_len, s);
+    err_code_t err = validate_cfg(cfg, cfg_len, s);
     if (err != ERR_SUCCESS)
     {
         return err;
@@ -274,7 +274,7 @@ uint8_t i2c_sensor_setup(const uint8_t *cfg, uint16_t cfg_len, uint8_t *out_sens
     return ERR_SUCCESS;
 }
 
-uint8_t i2c_sensor_set_output(uint8_t internal_id, const uint8_t *values, uint16_t values_len)
+err_code_t i2c_sensor_set_output(uint8_t internal_id, const uint8_t *values, uint16_t values_len)
 {
 
     assert(values != NULL || values_len == 0U);
@@ -319,7 +319,7 @@ uint8_t i2c_sensor_set_output(uint8_t internal_id, const uint8_t *values, uint16
     return ERR_SUCCESS;
 }
 
-uint8_t i2c_sensor_stop(uint8_t internal_id)
+err_code_t i2c_sensor_stop(uint8_t internal_id)
 {
     assert(internal_id < I2C_SENSOR_MAX_COUNT);
 

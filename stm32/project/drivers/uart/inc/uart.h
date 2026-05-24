@@ -53,8 +53,8 @@ void uart_init(void);
 void uart_set_rx_notify_task(TaskHandle_t task);
 
 /* Non-blocking single-byte dequeue.
- * Returns ERR_CODE_OK and writes the byte to *out if one was available.
- * Returns ERR_CODE_EMPTY if the RX buffer is empty. */
+ * Returns ERR_SUCCESS and writes the byte to *out if one was available.
+ * Returns ERR_EMPTY if the RX buffer is empty. */
 err_code_t uart_rx_pop(uint8_t *out);
 
 /* Non-blocking bulk enqueue into TX buffer. Starts draining via TXE
@@ -63,7 +63,7 @@ err_code_t uart_rx_pop(uint8_t *out);
  *   len        = number of bytes to send
  *   out_pushed = filled with the actual number queued (may be < len if
  *                the buffer is full)
- * Returns ERR_CODE_OK always; inspect *out_pushed for partial writes. */
+ * Returns ERR_SUCCESS always; inspect *out_pushed for partial writes. */
 err_code_t uart_tx_push(const uint8_t *data, size_t len, size_t *out_pushed);
 
 #endif /* UART_H */

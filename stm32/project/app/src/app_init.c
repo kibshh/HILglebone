@@ -65,7 +65,7 @@ static void task_protocol(void *params)
         (void)ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
         uint8_t b;
-        while (uart_rx_pop(&b) == ERR_CODE_OK)
+        while (uart_rx_pop(&b) == ERR_SUCCESS)
         {
             if (protocol_parser_feed(&parser, b))
             {

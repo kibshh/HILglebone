@@ -111,7 +111,7 @@ Pick based on required pulse duration:
 
 ### Response
 
-Standard `RSP_ACK`. On success: `error_code = SUCCESS`, `sensor_id` =
+Standard `RSP_ACK`. On success: `error_code = ERR_SUCCESS`, `sensor_id` =
 the newly allocated id. On failure: a non-zero error_code and
 `sensor_id = 0`.
 
@@ -159,11 +159,11 @@ On STOP the firmware:
 
 | Code | Name                       | When it fires                                                              |
 |------|----------------------------|----------------------------------------------------------------------------|
-| 0x02 | `ERR_MALFORMED_PAYLOAD`    | Setup or set-output payload too short                                      |
-| 0x05 | `ERR_OUT_OF_RESOURCES`     | All 8 digital-output slots already in use                                  |
-| 0x07 | `ERR_INVALID_PARAMETER`    | Any field out of range; or HW `pulse_us` exceeds the timer's counter cap   |
-| 0x08 | `ERR_PERIPHERAL_BUSY`      | `timer_id` is currently allocated for PWM                                  |
-| 0x09 | `ERR_PIN_CONFLICT`         | The (port, pin) tuple is already owned by another sensor                   |
+| 0x02 | `ERR_MALFORMED_PAYLOAD`       | Setup or set-output payload too short                                      |
+| 0x05 | `ERR_OUT_OF_RESOURCES`    | All 8 digital-output slots already in use                                  |
+| 0x07 | `ERR_INVALID_PARAMETER`   | Any field out of range; or HW `pulse_us` exceeds the timer's counter cap   |
+| 0x08 | `ERR_PERIPHERAL_BUSY` | `timer_id` is currently allocated for PWM                                  |
+| 0x09 | `ERR_PIN_CONFLICT`    | The (port, pin) tuple is already owned by another sensor                   |
 
 ## 7. Worked example — DRDY pulse line
 

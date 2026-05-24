@@ -14,6 +14,8 @@
 
 #include <stdint.h>
 
+#include "err_codes.h"
+
 /* ── Capacity ─────────────────────────────────────────────────────── */
 
 /* Same cap as the global sensor table -- if the global table fills up
@@ -92,22 +94,22 @@ void digital_out_sensor_init(void);
  *   `cfg_len`       = length of that slice
  *   `out_sensor_id` = filled with the newly-allocated id on success, or
  *                     PROTO_SENSOR_ID_NONE on failure
- * Returns PROTO_CODE_OK or a common error code. */
-uint8_t digital_out_sensor_setup(const uint8_t *cfg,
-                                 uint16_t       cfg_len,
-                                 uint8_t       *out_sensor_id);
+ * Returns ERR_SUCCESS or a common error code. */
+err_code_t digital_out_sensor_setup(const uint8_t *cfg,
+                                     uint16_t       cfg_len,
+                                     uint8_t       *out_sensor_id);
 
 /* Handle CMD_SET_OUTPUT for a digital-output sensor.
  *   `internal_id`  = index returned by digital_out_sensor_setup
  *   `values`       = payload bytes starting AFTER the generic sensor_id byte
  *   `values_len`   = length of that slice
- * Returns PROTO_CODE_OK or an error code. */
-uint8_t digital_out_sensor_set_output(uint8_t        internal_id,
-                                      const uint8_t *values,
-                                      uint16_t       values_len);
+ * Returns ERR_SUCCESS or an error code. */
+err_code_t digital_out_sensor_set_output(uint8_t        internal_id,
+                                          const uint8_t *values,
+                                          uint16_t       values_len);
 
 /* Handle CMD_STOP_SENSOR for a digital-output sensor. Cancels any
  * in-flight pulse, reverts the pin to floating input, and frees the slot. */
-uint8_t digital_out_sensor_stop(uint8_t internal_id);
+err_code_t digital_out_sensor_stop(uint8_t internal_id);
 
 #endif /* DIGITAL_OUT_SENSOR_H */

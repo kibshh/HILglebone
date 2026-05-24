@@ -98,11 +98,11 @@ static void hw_timer_callback(uint8_t internal_id)
 
 /* ── Validation ───────────────────────────────────────────────────── */
 
-static uint8_t validate_cfg(const uint8_t        *cfg,
-                            uint16_t              cfg_len,
-                            digital_out_state_t  *out_state,
-                            gpio_output_config_t *out_gpio_cfg,
-                            uint8_t              *out_initial_level)
+static err_code_t validate_cfg(const uint8_t        *cfg,
+                               uint16_t              cfg_len,
+                               digital_out_state_t  *out_state,
+                               gpio_output_config_t *out_gpio_cfg,
+                               uint8_t              *out_initial_level)
 {
     assert(out_state != NULL);
     assert(out_gpio_cfg != NULL);
@@ -172,9 +172,9 @@ void digital_out_sensor_init(void)
     /* hw_timer_init() is called from dispatcher_init() before this. */
 }
 
-uint8_t digital_out_sensor_setup(const uint8_t *cfg,
-                                 uint16_t       cfg_len,
-                                 uint8_t       *out_sensor_id)
+err_code_t digital_out_sensor_setup(const uint8_t *cfg,
+                                     uint16_t       cfg_len,
+                                     uint8_t       *out_sensor_id)
 {
     assert(cfg != NULL || cfg_len == 0U);
     assert(out_sensor_id != NULL);
@@ -191,7 +191,7 @@ uint8_t digital_out_sensor_setup(const uint8_t *cfg,
     gpio_output_config_t  gpio_cfg      = {0};
     uint8_t               initial_level = DIGITAL_OUT_LEVEL_LOW;
 
-    uint8_t err = validate_cfg(cfg, cfg_len, s, &gpio_cfg, &initial_level);
+    err_code_t err = validate_cfg(cfg, cfg_len, s, &gpio_cfg, &initial_level);
     if (err != ERR_SUCCESS)
     {
         return err;
@@ -231,9 +231,9 @@ uint8_t digital_out_sensor_setup(const uint8_t *cfg,
     return ERR_SUCCESS;
 }
 
-uint8_t digital_out_sensor_set_output(uint8_t        internal_id,
-                                      const uint8_t *values,
-                                      uint16_t       values_len)
+err_code_t digital_out_sensor_set_output(uint8_t        internal_id,
+                                          const uint8_t *values,
+                                          uint16_t       values_len)
 {
     assert(internal_id < DIGITAL_OUT_SENSOR_MAX_COUNT);
     assert(values != NULL || values_len == 0U);
@@ -319,7 +319,7 @@ uint8_t digital_out_sensor_set_output(uint8_t        internal_id,
     return ERR_SUCCESS;
 }
 
-uint8_t digital_out_sensor_stop(uint8_t internal_id)
+err_code_t digital_out_sensor_stop(uint8_t internal_id)
 {
     assert(internal_id < DIGITAL_OUT_SENSOR_MAX_COUNT);
 

@@ -3,33 +3,15 @@
 #include <assert.h>
 #include <stddef.h>
 
+#include "err_codes.h"
 #include "dac_sensor.h"
 #include "digital_out_sensor.h"
-#include "err_codes.h"
 #include "hw_timer.h"
 #include "i2c_sensor.h"
 #include "protocol.h"
 #include "protocol_encoder.h"
 #include "pwm_sensor.h"
 #include "sensor_manager.h"
-
-/* ── err_code_t → proto_code_t mapping ───────────────────────────── */
-
-static uint8_t map_err(err_code_t e)
-{
-    switch (e)
-    {
-    case ERR_CODE_OK:        return PROTO_CODE_OK;
-    case ERR_CODE_ARG:       return PROTO_CODE_INVALID_PARAM;
-    case ERR_CODE_BUSY:      return PROTO_CODE_PERIPHERAL_BUSY;
-    case ERR_CODE_RESOURCES: return PROTO_CODE_NO_RESOURCES;
-    case ERR_CODE_CONFLICT:  return PROTO_CODE_PIN_CONFLICT;
-    case ERR_CODE_TIMEOUT:   return PROTO_CODE_INTERNAL;
-    case ERR_CODE_INTERNAL:  return PROTO_CODE_INTERNAL;
-    case ERR_CODE_EMPTY:     return PROTO_CODE_INTERNAL;
-    default:                 return PROTO_CODE_INTERNAL;
-    }
-}
 
 /* ── Command handlers ─────────────────────────────────────────────── */
 
@@ -38,7 +20,7 @@ static void handle_sync(const parsed_frame_t *f)
     assert(f != NULL);
 
     (void)protocol_send_ack(PROTO_TYPE_CMD_SYNC,
-                            PROTO_CODE_OK,
+                            ERR_SUCCESS,
                             PROTO_SENSOR_ID_NONE,
                             f->seq);
 }
@@ -50,7 +32,7 @@ static void handle_setup(const parsed_frame_t *f)
     if (f->len < CMD_SETUP_HEADER_SIZE)
     {
         (void)protocol_send_ack(PROTO_TYPE_CMD_SETUP_SENSOR,
-                                PROTO_CODE_MALFORMED,
+                                ERR_MALFORMED_PAYLOAD,
                                 PROTO_SENSOR_ID_NONE,
                                 f->seq);
         return;
@@ -60,7 +42,7 @@ static void handle_setup(const parsed_frame_t *f)
     const uint8_t *cfg         = &f->payload[CMD_SETUP_OFFSET_CFG];
     uint16_t       cfg_len     = (uint16_t)(f->len - CMD_SETUP_HEADER_SIZE);
 
-    uint8_t    sensor_id = PROTO_SENSOR_ID_NONE;
+    uint8_t sensor_id = PROTO_SENSOR_ID_NONE;
     err_code_t err;
 
     switch (protocol_id)
@@ -87,20 +69,19 @@ static void handle_setup(const parsed_frame_t *f)
     case PROTO_ID_ONEWIRE:
     case PROTO_ID_CAN:
     default:
-        err = ERR_CODE_ARG;  /* unsupported — mapped to PROTO_CODE_UNSUPPORTED below */
         (void)protocol_send_ack(PROTO_TYPE_CMD_SETUP_SENSOR,
-                                PROTO_CODE_UNSUPPORTED,
+                                ERR_UNSUPPORTED,
                                 PROTO_SENSOR_ID_NONE,
                                 f->seq);
         return;
     }
 
-    if (err != ERR_CODE_OK)
+    if (err != ERR_SUCCESS)
     {
         sensor_id = PROTO_SENSOR_ID_NONE;
     }
 
-    (void)protocol_send_ack(PROTO_TYPE_CMD_SETUP_SENSOR, map_err(err), sensor_id, f->seq);
+    (void)protocol_send_ack(PROTO_TYPE_CMD_SETUP_SENSOR, err, sensor_id, f->seq);
 }
 
 static void handle_set_output(const parsed_frame_t *f)
@@ -110,7 +91,7 @@ static void handle_set_output(const parsed_frame_t *f)
     if (f->len < CMD_SET_OUTPUT_HEADER_SIZE)
     {
         (void)protocol_send_ack(PROTO_TYPE_CMD_SET_OUTPUT,
-                                PROTO_CODE_MALFORMED,
+                                ERR_MALFORMED_PAYLOAD,
                                 PROTO_SENSOR_ID_NONE,
                                 f->seq);
         return;
@@ -124,7 +105,7 @@ static void handle_set_output(const parsed_frame_t *f)
     if (slot == NULL)
     {
         (void)protocol_send_ack(PROTO_TYPE_CMD_SET_OUTPUT,
-                                PROTO_CODE_INVALID_SENSOR,
+                                ERR_INVALID_SENSOR_ID,
                                 sensor_id,
                                 f->seq);
         return;
@@ -150,11 +131,11 @@ static void handle_set_output(const parsed_frame_t *f)
         break;
 
     default:
-        err = ERR_CODE_ARG;
+        err = ERR_INVALID_PARAMETER;
         break;
     }
 
-    (void)protocol_send_ack(PROTO_TYPE_CMD_SET_OUTPUT, map_err(err), sensor_id, f->seq);
+    (void)protocol_send_ack(PROTO_TYPE_CMD_SET_OUTPUT, err, sensor_id, f->seq);
 }
 
 static void handle_stop(const parsed_frame_t *f)
@@ -164,7 +145,7 @@ static void handle_stop(const parsed_frame_t *f)
     if (f->len < CMD_STOP_PAYLOAD_SIZE)
     {
         (void)protocol_send_ack(PROTO_TYPE_CMD_STOP_SENSOR,
-                                PROTO_CODE_MALFORMED,
+                                ERR_MALFORMED_PAYLOAD,
                                 PROTO_SENSOR_ID_NONE,
                                 f->seq);
         return;
@@ -176,7 +157,7 @@ static void handle_stop(const parsed_frame_t *f)
     if (slot == NULL)
     {
         (void)protocol_send_ack(PROTO_TYPE_CMD_STOP_SENSOR,
-                                PROTO_CODE_INVALID_SENSOR,
+                                ERR_INVALID_SENSOR_ID,
                                 sensor_id,
                                 f->seq);
         return;
@@ -202,16 +183,16 @@ static void handle_stop(const parsed_frame_t *f)
         break;
 
     default:
-        err = ERR_CODE_ARG;
+        err = ERR_INVALID_PARAMETER;
         break;
     }
 
-    if (err == ERR_CODE_OK)
+    if (err == ERR_SUCCESS)
     {
         sensor_manager_release(sensor_id);
     }
 
-    (void)protocol_send_ack(PROTO_TYPE_CMD_STOP_SENSOR, map_err(err), sensor_id, f->seq);
+    (void)protocol_send_ack(PROTO_TYPE_CMD_STOP_SENSOR, err, sensor_id, f->seq);
 }
 
 /* ── Public API ───────────────────────────────────────────────────── */
@@ -250,14 +231,14 @@ void dispatcher_handle(const parsed_frame_t *frame)
 
     case PROTO_TYPE_CMD_SCENARIO:
         (void)protocol_send_ack(frame->type,
-                                PROTO_CODE_NOT_IMPLEMENTED,
+                                ERR_NOT_IMPLEMENTED,
                                 PROTO_SENSOR_ID_NONE,
                                 frame->seq);
         break;
 
     default:
         (void)protocol_send_ack(frame->type,
-                                PROTO_CODE_UNKNOWN_CMD,
+                                ERR_UNKNOWN_CMD,
                                 PROTO_SENSOR_ID_NONE,
                                 frame->seq);
         break;

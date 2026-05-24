@@ -131,9 +131,9 @@ void pwm_sensor_init(void)
     memset(pin_owned, 0, sizeof(pin_owned));
 }
 
-uint8_t pwm_sensor_setup(const uint8_t *cfg,
-                         uint16_t       cfg_len,
-                         uint8_t       *out_sensor_id)
+err_code_t pwm_sensor_setup(const uint8_t *cfg,
+                             uint16_t       cfg_len,
+                             uint8_t       *out_sensor_id)
 {
     assert(cfg != NULL || cfg_len == 0U);
     assert(out_sensor_id != NULL);
@@ -188,7 +188,7 @@ uint8_t pwm_sensor_setup(const uint8_t *cfg,
 
     /* Acquire the timer (or join an existing PWM session at same freq). */
     uint32_t arr;
-    uint8_t  err = hw_timer_pwm_acquire(timer_id, freq_hz, &arr);
+    err_code_t err = hw_timer_pwm_acquire(timer_id, freq_hz, &arr);
     if (err != ERR_SUCCESS)
     {
         return err;
@@ -240,9 +240,9 @@ uint8_t pwm_sensor_setup(const uint8_t *cfg,
     return ERR_SUCCESS;
 }
 
-uint8_t pwm_sensor_set_output(uint8_t        internal_id,
-                              const uint8_t *values,
-                              uint16_t       values_len)
+err_code_t pwm_sensor_set_output(uint8_t        internal_id,
+                                  const uint8_t *values,
+                                  uint16_t       values_len)
 {
     assert(internal_id < PWM_SLOT_POOL_SIZE);
     assert(values != NULL || values_len == 0U);
@@ -274,7 +274,7 @@ uint8_t pwm_sensor_set_output(uint8_t        internal_id,
     return ERR_SUCCESS;
 }
 
-uint8_t pwm_sensor_stop(uint8_t internal_id)
+err_code_t pwm_sensor_stop(uint8_t internal_id)
 {
     assert(internal_id < PWM_SLOT_POOL_SIZE);
 

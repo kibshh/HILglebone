@@ -53,23 +53,23 @@ static err_code_t push_frame(const uint8_t *frame, size_t len)
 
     size_t     pushed = 0;
     err_code_t err    = uart_tx_push(frame, len, &pushed);
-    if (err != ERR_CODE_OK)
+    if (err != ERR_SUCCESS)
     {
         return err;
     }
-    return (pushed == len) ? ERR_CODE_OK : ERR_CODE_RESOURCES;
+    return (pushed == len) ? ERR_SUCCESS : ERR_OUT_OF_RESOURCES;
 }
 
-err_code_t protocol_send_ack(uint8_t cmd_type,
-                             uint8_t error_code,
-                             uint8_t sensor_id,
-                             uint8_t seq)
+err_code_t protocol_send_ack(uint8_t    cmd_type,
+                             err_code_t error_code,
+                             uint8_t    sensor_id,
+                             uint8_t    seq)
 {
     uint8_t frame[PROTO_FRAME_OVERHEAD + RSP_ACK_PAYLOAD_SIZE];
     uint8_t payload[RSP_ACK_PAYLOAD_SIZE];
 
     payload[RSP_ACK_OFFSET_CMD_TYPE]   = cmd_type;
-    payload[RSP_ACK_OFFSET_ERROR_CODE] = error_code;
+    payload[RSP_ACK_OFFSET_ERROR_CODE] = (uint8_t)error_code;
     payload[RSP_ACK_OFFSET_SENSOR_ID]  = sensor_id;
 
     size_t n = build_frame(frame,
@@ -81,15 +81,15 @@ err_code_t protocol_send_ack(uint8_t cmd_type,
     return push_frame(frame, n);
 }
 
-err_code_t protocol_send_error(uint8_t sensor_id,
-                               uint8_t error_code,
-                               uint8_t seq)
+err_code_t protocol_send_error(uint8_t    sensor_id,
+                               err_code_t error_code,
+                               uint8_t    seq)
 {
     uint8_t frame[PROTO_FRAME_OVERHEAD + RSP_ERROR_PAYLOAD_SIZE];
     uint8_t payload[RSP_ERROR_PAYLOAD_SIZE];
 
     payload[RSP_ERROR_OFFSET_SENSOR_ID]  = sensor_id;
-    payload[RSP_ERROR_OFFSET_ERROR_CODE] = error_code;
+    payload[RSP_ERROR_OFFSET_ERROR_CODE] = (uint8_t)error_code;
 
     size_t n = build_frame(frame,
                            PROTO_TYPE_RSP_ERROR,

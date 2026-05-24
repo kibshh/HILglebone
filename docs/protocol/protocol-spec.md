@@ -128,7 +128,7 @@ Payload layout (generic framing -- inner bytes vary by protocol):
 | 0x02 | SPI slave          | (TBD)                                       |
 | 0x03 | Digital output     | [digital-io-spec.md](digital-io-spec.md)    |
 | 0x04 | Digital input      | [digital-io-spec.md](digital-io-spec.md) (reserved) |
-| 0x05 | Analog output (DAC)| (TBD)                                       |
+| 0x05 | Analog output (DAC)| [dac-spec.md](dac-spec.md)                  |
 | 0x06 | PWM output         | [pwm-spec.md](pwm-spec.md)                  |
 | 0x07 | Frequency output   | (TBD)                                       |
 | 0x08 | 1-Wire slave       | (TBD)                                       |
@@ -138,9 +138,9 @@ Payload layout (generic framing -- inner bytes vary by protocol):
 
 Unified `RSP_ACK` (see the "RSP_ACK" section below for the full layout).
 
-- On success: `error_code = SUCCESS`, `sensor_id` = the newly allocated id.
+- On success: `error_code = ERR_SUCCESS`, `sensor_id` = the newly allocated id.
   The sensor is live and addressable from the next message onward.
-- On failure: `error_code` != `SUCCESS`, `sensor_id = 0x00`. No sensor is
+- On failure: `error_code` != `ERR_SUCCESS`, `sensor_id = 0x00`. No sensor is
   created; no id is allocated.
 
 ## CMD_SET_OUTPUT
@@ -172,7 +172,7 @@ Payload layout:
 
 On success the STM32 disables the emulation, releases the peripheral and
 its pins, and frees the id for reuse. Response: `RSP_ACK` with
-`error_code = SUCCESS` and the same `sensor_id` echoed back.
+`error_code = ERR_SUCCESS` and the same `sensor_id` echoed back.
 
 ## RSP_ACK
 
@@ -185,7 +185,7 @@ field inside the ACK payload distinguishes success from failure.
 | Offset | Size | Name         | Description                                                            |
 |--------|------|--------------|------------------------------------------------------------------------|
 | 0      | 1    | `cmd_type`   | TYPE byte of the command being acknowledged (e.g. `0x01` for SETUP)    |
-| 1      | 1    | `error_code` | `SUCCESS` = success; non-zero = failure (see error-code table below)   |
+| 1      | 1    | `error_code` | `ERR_SUCCESS` = success; non-zero = failure (see table below)        |
 | 2      | 1    | `sensor_id`  | See "Sensor-id field semantics" below                                  |
 
 Fixed payload size: **3 bytes**. `error_code` is expected to be
@@ -219,18 +219,18 @@ stream. Cheap defense in depth (1 byte).
 
 | Code | Name                      | Meaning                                                            |
 |------|---------------------------|--------------------------------------------------------------------|
-| 0x00 | `SUCCESS`                 | Command executed successfully                                      |
-| 0x01 | `ERR_UNKNOWN_COMMAND`     | TYPE byte not recognized                                           |
-| 0x02 | `ERR_MALFORMED_PAYLOAD`   | Payload too short / bad layout for the TYPE                        |
-| 0x03 | `ERR_BAD_CRC`             | CRC16 did not match (rarely returned -- usually dropped silently)  |
-| 0x04 | `ERR_PROTOCOL_UNSUPPORTED`| `protocol_id` not implemented on this firmware                     |
+| 0x00 | `ERR_SUCCESS`              | Command executed successfully                                      |
+| 0x01 | `ERR_UNKNOWN_CMD`     | TYPE byte not recognized                                           |
+| 0x02 | `ERR_MALFORMED_PAYLOAD`       | Payload too short / bad layout for the TYPE                        |
+| 0x03 | `ERR_BAD_CRC`         | CRC16 did not match (rarely returned -- usually dropped silently)  |
+| 0x04 | `ERR_UNSUPPORTED`     | `protocol_id` not implemented on this firmware                     |
 | 0x05 | `ERR_OUT_OF_RESOURCES`    | No free sensor slots / RAM                                         |
-| 0x06 | `ERR_INVALID_SENSOR_ID`   | Sensor id does not refer to an active sensor                       |
+| 0x06 | `ERR_INVALID_SENSOR_ID`  | Sensor id does not refer to an active sensor                       |
 | 0x07 | `ERR_INVALID_PARAMETER`   | A generic field (not protocol-specific) had an illegal value       |
-| 0x08 | `ERR_PERIPHERAL_BUSY`     | Requested peripheral (I2C1, SPI2, ...) already bound to another id |
-| 0x09 | `ERR_PIN_CONFLICT`        | A requested pin is already in use by another active sensor         |
-| 0x0A | `ERR_UNSUPPORTED_FEATURE` | Parameter is structurally valid but not implemented yet            |
-| 0x0B | `ERR_INTERNAL`            | STM32 reached an unexpected state (firmware bug or hardware fault) |
+| 0x08 | `ERR_PERIPHERAL_BUSY` | Requested peripheral (I2C1, SPI2, ...) already bound to another id |
+| 0x09 | `ERR_PIN_CONFLICT`    | A requested pin is already in use by another active sensor         |
+| 0x0A | `ERR_NOT_IMPLEMENTED` | Parameter is structurally valid but not implemented yet            |
+| 0x0B | `ERR_INTERNAL`        | STM32 reached an unexpected state (firmware bug or hardware fault) |
 
 Each protocol spec extends this table with its own error codes in the range
 `0x40`..`0xBF` (e.g. I2C uses `0x40`..`0x5F`). The range `0xC0`..`0xFF` is
