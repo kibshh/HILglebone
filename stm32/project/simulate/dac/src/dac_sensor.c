@@ -17,9 +17,9 @@
 typedef struct
 {
     bool                  initialized;
-    spi_master_periph_t   periph;
+    spi_periph_t          periph;
     uint32_t              clock_hz;
-    spi_master_mode_t     spi_mode;
+    spi_mode_t            spi_mode;
     gpio_pin_t            mosi_pin;
     gpio_pin_t            sck_pin;
     gpio_pin_t            cs_pin;
@@ -30,13 +30,13 @@ typedef struct
     uint8_t               tx_buf[DAC_SPI_FRAME_SIZE];
 } dac_chip_t;
 
-static dac_chip_t chips[SPI_MASTER_COUNT];
+static dac_chip_t chips[SPI_PERIPH_COUNT];
 
 typedef struct
 {
-    bool                in_use;
-    spi_master_periph_t periph;
-    uint8_t             channel;
+    bool         in_use;
+    spi_periph_t periph;
+    uint8_t      channel;
 } dac_sensor_state_t;
 
 static dac_sensor_state_t states[DAC_SENSOR_MAX_COUNT];
@@ -52,7 +52,7 @@ static void chip_teardown(dac_chip_t *chip)
     chip->initialized = false;
 }
 
-static uint8_t slot_for(spi_master_periph_t periph, uint8_t channel)
+static uint8_t slot_for(spi_periph_t periph, uint8_t channel)
 {
     return (uint8_t)((uint8_t)periph * DAC_CHANNELS_PER_CHIP + channel);
 }
@@ -110,41 +110,41 @@ err_code_t dac_sensor_setup(const uint8_t *cfg, uint16_t cfg_len, uint8_t *out_s
 
     uint8_t  spi_periph_u8 = cfg[DAC_CFG_OFFSET_SPI_PERIPH];
     uint32_t clock_hz      = read_u32_le(&cfg[DAC_CFG_OFFSET_SPI_CLOCK_HZ]);
-    uint8_t  mosi_port     = cfg[DAC_CFG_OFFSET_MOSI_PORT];
+    uint8_t  mosi_port_val = cfg[DAC_CFG_OFFSET_MOSI_PORT];
     uint8_t  mosi_pin      = cfg[DAC_CFG_OFFSET_MOSI_PIN];
     uint8_t  mosi_af       = cfg[DAC_CFG_OFFSET_MOSI_AF];
-    uint8_t  sck_port      = cfg[DAC_CFG_OFFSET_SCK_PORT];
+    uint8_t  sck_port_val  = cfg[DAC_CFG_OFFSET_SCK_PORT];
     uint8_t  sck_pin_val   = cfg[DAC_CFG_OFFSET_SCK_PIN];
     uint8_t  sck_af        = cfg[DAC_CFG_OFFSET_SCK_AF];
-    uint8_t  cs_port       = cfg[DAC_CFG_OFFSET_CS_PORT];
+    uint8_t  cs_port_val   = cfg[DAC_CFG_OFFSET_CS_PORT];
     uint8_t  cs_pin_val    = cfg[DAC_CFG_OFFSET_CS_PIN];
-    uint8_t  ldac_port     = cfg[DAC_CFG_OFFSET_LDAC_PORT];
+    uint8_t  ldac_port_val = cfg[DAC_CFG_OFFSET_LDAC_PORT];
     uint8_t  ldac_pin_val  = cfg[DAC_CFG_OFFSET_LDAC_PIN];
     uint8_t  channel       = cfg[DAC_CFG_OFFSET_CHANNEL];
     uint8_t  reference     = cfg[DAC_CFG_OFFSET_REFERENCE];
     uint8_t  spi_mode_u8   = cfg[DAC_CFG_OFFSET_SPI_MODE];
     uint16_t initial_value = read_u16_le(&cfg[DAC_CFG_OFFSET_INITIAL_VALUE]);
 
-    bool ldac_en = (ldac_port != DAC_LDAC_PORT_DISABLED);
+    bool ldac_en = (ldac_port_val != DAC_LDAC_PORT_DISABLED);
 
-    if (spi_periph_u8 >= (uint8_t)SPI_MASTER_COUNT ||
+    if (spi_periph_u8 >= (uint8_t)SPI_PERIPH_COUNT ||
         clock_hz == 0U ||
-        mosi_port > (uint8_t)GPIO_PORT_MAX || mosi_pin > GPIO_PIN_MAX ||
+        mosi_port_val > (uint8_t)GPIO_PORT_MAX || mosi_pin > GPIO_PIN_MAX ||
         mosi_af == 0U || mosi_af > GPIO_AF_MAX ||
-        sck_port > (uint8_t)GPIO_PORT_MAX || sck_pin_val > GPIO_PIN_MAX ||
+        sck_port_val > (uint8_t)GPIO_PORT_MAX || sck_pin_val > GPIO_PIN_MAX ||
         sck_af == 0U || sck_af > GPIO_AF_MAX ||
-        cs_port > (uint8_t)GPIO_PORT_MAX || cs_pin_val > GPIO_PIN_MAX ||
-        (ldac_en && (ldac_port > (uint8_t)GPIO_PORT_MAX || ldac_pin_val > GPIO_PIN_MAX)) ||
+        cs_port_val > (uint8_t)GPIO_PORT_MAX || cs_pin_val > GPIO_PIN_MAX ||
+        (ldac_en && (ldac_port_val > (uint8_t)GPIO_PORT_MAX || ldac_pin_val > GPIO_PIN_MAX)) ||
         channel > DAC_CHANNEL_MAX || reference > DAC_REFERENCE_MAX ||
-        spi_mode_u8 > (uint8_t)SPI_MASTER_MODE_MAX)
+        spi_mode_u8 > (uint8_t)SPI_MODE_MAX)
     {
         return ERR_INVALID_PARAMETER;
     }
 
-    spi_master_periph_t periph   = (spi_master_periph_t)spi_periph_u8;
-    spi_master_mode_t   spi_mode = (spi_master_mode_t)spi_mode_u8;
+    spi_periph_t periph   = (spi_periph_t)spi_periph_u8;
+    spi_mode_t   spi_mode = (spi_mode_t)spi_mode_u8;
 
-    uint32_t max_clock = (periph == SPI_MASTER_SPI1)
+    uint32_t max_clock = (periph == SPI_PERIPH_SPI1)
                          ? SPI_MASTER_SPI1_MAX_CLOCK_HZ
                          : SPI_MASTER_SPI2_MAX_CLOCK_HZ;
     if (clock_hz > max_clock)
@@ -158,10 +158,10 @@ err_code_t dac_sensor_setup(const uint8_t *cfg, uint16_t cfg_len, uint8_t *out_s
     {
         if (chip->clock_hz != clock_hz || chip->spi_mode != spi_mode)
             return ERR_DAC_CLOCK_MISMATCH;
-        if (chip->mosi_pin.port != gpio_port_handle((gpio_port_t)mosi_port) || chip->mosi_pin.pin != mosi_pin ||
-            chip->sck_pin.port  != gpio_port_handle((gpio_port_t)sck_port)  || chip->sck_pin.pin  != sck_pin_val ||
-            chip->cs_pin.port   != gpio_port_handle((gpio_port_t)cs_port)   || chip->cs_pin.pin   != cs_pin_val ||
-            chip->ldac_pin.port != gpio_port_handle((gpio_port_t)ldac_port) || chip->ldac_pin.pin != ldac_pin_val)
+        if (chip->mosi_pin.port != gpio_port_handle((gpio_port_t)mosi_port_val) || chip->mosi_pin.pin != mosi_pin ||
+            chip->sck_pin.port  != gpio_port_handle((gpio_port_t)sck_port_val)  || chip->sck_pin.pin  != sck_pin_val ||
+            chip->cs_pin.port   != gpio_port_handle((gpio_port_t)cs_port_val)   || chip->cs_pin.pin   != cs_pin_val ||
+            chip->ldac_pin.port != gpio_port_handle((gpio_port_t)ldac_port_val) || chip->ldac_pin.pin != ldac_pin_val)
             return ERR_DAC_PIN_MISMATCH;
         if (chip->channels_active & (1U << channel))
             return ERR_DAC_CHANNEL_IN_USE;
@@ -173,27 +173,27 @@ err_code_t dac_sensor_setup(const uint8_t *cfg, uint16_t cfg_len, uint8_t *out_s
     if (!chip->initialized)
     {
         /* All validation passed — build gpio descriptors, then configure hardware. */
-        gpio_pin_t mosi_gpio = gpio_make_pin((gpio_port_t)mosi_port, mosi_pin);
-        gpio_pin_t sck_gpio  = gpio_make_pin((gpio_port_t)sck_port,  sck_pin_val);
-        gpio_pin_t cs_gpio   = gpio_make_pin((gpio_port_t)cs_port,   cs_pin_val);
+        gpio_pin_t mosi_gpio = gpio_make_pin((gpio_port_t)mosi_port_val, mosi_pin);
+        gpio_pin_t sck_gpio  = gpio_make_pin((gpio_port_t)sck_port_val,  sck_pin_val);
+        gpio_pin_t cs_gpio   = gpio_make_pin((gpio_port_t)cs_port_val,   cs_pin_val);
         gpio_pin_t ldac_gpio = {0};
 
-        gpio_enable_clock((gpio_port_t)mosi_port);
+        gpio_enable_clock((gpio_port_t)mosi_port_val);
         gpio_af_config_t mosi_cfg = { .pin = mosi_gpio, .af = mosi_af, .speed = GPIO_SPEED_HIGH, .pull = GPIO_PULL_NONE };
         gpio_configure_af(&mosi_cfg);
 
-        gpio_enable_clock((gpio_port_t)sck_port);
+        gpio_enable_clock((gpio_port_t)sck_port_val);
         gpio_af_config_t sck_cfg = { .pin = sck_gpio, .af = sck_af, .speed = GPIO_SPEED_HIGH, .pull = GPIO_PULL_NONE };
         gpio_configure_af(&sck_cfg);
 
-        gpio_enable_clock((gpio_port_t)cs_port);
+        gpio_enable_clock((gpio_port_t)cs_port_val);
         gpio_output_config_t cs_cfg = { .pin = cs_gpio, .output_type = GPIO_OUTPUT_PUSH_PULL, .speed = GPIO_SPEED_HIGH, .pull = GPIO_PULL_NONE };
         gpio_configure_output(&cs_cfg, DIGITAL_OUT_LEVEL_HIGH);
 
         if (ldac_en)
         {
-            ldac_gpio = gpio_make_pin((gpio_port_t)ldac_port, ldac_pin_val);
-            gpio_enable_clock((gpio_port_t)ldac_port);
+            ldac_gpio = gpio_make_pin((gpio_port_t)ldac_port_val, ldac_pin_val);
+            gpio_enable_clock((gpio_port_t)ldac_port_val);
             gpio_output_config_t ldac_cfg = { .pin = ldac_gpio, .output_type = GPIO_OUTPUT_PUSH_PULL, .speed = GPIO_SPEED_HIGH, .pull = GPIO_PULL_NONE };
             gpio_configure_output(&ldac_cfg, DIGITAL_OUT_LEVEL_HIGH);
         }

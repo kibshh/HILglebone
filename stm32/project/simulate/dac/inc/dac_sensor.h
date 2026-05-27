@@ -20,7 +20,7 @@
 /* ── Capacity ─────────────────────────────────────────────────────── */
 
 #define DAC_CHANNELS_PER_CHIP   8U      /* A..H */
-#define DAC_SENSOR_MAX_COUNT    16U     /* 2 SPI peripherals × 8 channels */
+#define DAC_SENSOR_MAX_COUNT    16U     /* SPI_PERIPH_COUNT peripherals × 8 channels */
 #define DAC_SPI_FRAME_SIZE      4U      /* DAC8568 command is always a 32-bit big-endian word */
 #define DAC_SPI_TX_TIMEOUT_MS   10U     /* max wait for SPI transfer completion semaphore */
 

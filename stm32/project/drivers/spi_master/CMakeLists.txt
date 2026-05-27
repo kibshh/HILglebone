@@ -6,5 +6,6 @@ target_include_directories(spi_master PUBLIC inc)
 
 target_link_libraries(spi_master PUBLIC
     shared
+    spi
     cmsis
 )

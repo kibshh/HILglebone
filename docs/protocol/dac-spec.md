@@ -1,4 +1,4 @@
-# DAC (Analog Output) Emulation Spec — DRAFT
+# DAC (Analog Output) Emulation Spec
 
 Payload formats for the analog-output protocol (`protocol_id = 0x05`).
 Plugs into the generic protocol in [protocol-spec.md](protocol-spec.md).

@@ -17,38 +17,11 @@
 #include <stdint.h>
 
 #include "err_codes.h"
-
-/* ── Peripheral identifiers ───────────────────────────────────────── */
-
-typedef enum
-{
-    SPI_MASTER_SPI1 = 0,
-    SPI_MASTER_SPI2 = 1,
-
-    SPI_MASTER_COUNT,
-} spi_master_periph_t;
+#include "spi.h"
 
 /* Maximum achievable SPI clock per peripheral (APB clock / 2). */
 #define SPI_MASTER_SPI1_MAX_CLOCK_HZ    42000000UL   /* APB2 84 MHz / 2 */
 #define SPI_MASTER_SPI2_MAX_CLOCK_HZ    21000000UL   /* APB1 42 MHz / 2 */
-
-/* ── SPI mode ─────────────────────────────────────────────────────── */
-
-/* Standard SPI modes.  Bit 1 = CPOL, bit 0 = CPHA.
- *   Mode 0: CPOL=0 CPHA=0 — idle low, sample on rising
- *   Mode 1: CPOL=0 CPHA=1 — idle low, sample on falling
- *   Mode 2: CPOL=1 CPHA=0 — idle high, sample on falling
- *   Mode 3: CPOL=1 CPHA=1 — idle high, sample on rising
- */
-typedef enum
-{
-    SPI_MASTER_MODE_0 = 0,
-    SPI_MASTER_MODE_1 = 1,
-    SPI_MASTER_MODE_2 = 2,
-    SPI_MASTER_MODE_3 = 3,
-
-    SPI_MASTER_MODE_MAX = SPI_MASTER_MODE_3,
-} spi_master_mode_t;
 
 /* ── Transfer callback ────────────────────────────────────────────── */
 
@@ -60,23 +33,24 @@ typedef void (*spi_master_callback_t)(void *ctx);
 
 /* Initialise the SPI peripheral at the requested baud rate and mode.
  * The actual clock may be slightly slower due to integer division.
- * Returns ERR_SUCCESS or ERR_INVALID_PARAMETER if any parameter is invalid. */
-err_code_t spi_master_init(spi_master_periph_t periph,
-                            uint32_t            clock_hz,
-                            spi_master_mode_t   mode);
+ * Returns ERR_SUCCESS, ERR_PERIPHERAL_BUSY if already claimed,
+ * or ERR_INVALID_PARAMETER if any parameter is invalid. */
+err_code_t spi_master_init(spi_periph_t periph,
+                           uint32_t     clock_hz,
+                           spi_mode_t   mode);
 
-/* Disable the SPI peripheral and gate its RCC clock.
+/* Disable the SPI peripheral and release the peripheral slot.
  * Returns ERR_SUCCESS or ERR_INVALID_PARAMETER if `periph` is out of range. */
-err_code_t spi_master_deinit(spi_master_periph_t periph);
+err_code_t spi_master_deinit(spi_periph_t periph);
 
 /* Begin an asynchronous transmit of `len` bytes from `buf`.
  * `cb(ctx)` is called from the SPI RXNE ISR when the transfer is done.
  * Returns ERR_SUCCESS, ERR_PERIPHERAL_BUSY if already transferring, or
  * ERR_INVALID_PARAMETER if the peripheral is not initialised or parameters are invalid. */
-err_code_t spi_master_write(spi_master_periph_t    periph,
-                             const uint8_t         *buf,
-                             uint8_t                len,
-                             spi_master_callback_t  cb,
-                             void                  *ctx);
+err_code_t spi_master_write(spi_periph_t           periph,
+                            const uint8_t         *buf,
+                            uint8_t                len,
+                            spi_master_callback_t  cb,
+                            void                  *ctx);
 
 #endif /* SPI_MASTER_H */

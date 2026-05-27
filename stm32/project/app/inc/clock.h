@@ -9,9 +9,7 @@
 #ifndef CLOCK_H
 #define CLOCK_H
 
-#define SYSTEM_CLOCK_HZ             84000000U
-#define APB1_CLOCK_HZ               42000000U
-#define APB2_CLOCK_HZ               84000000U
+#include "stm32_clk.h"
 
 void clock_init(void);
 
