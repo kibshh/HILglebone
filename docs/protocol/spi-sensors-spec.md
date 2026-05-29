@@ -99,23 +99,22 @@ Bytes starting *after* the generic `protocol_id` byte:
 |--------|------|-----------------|-------------|
 | 0      | 1    | `spi_periph`    | `0`=SPI1, `1`=SPI2 |
 | 1      | 1    | `spi_mode`      | `0`=Mode 0 .. `3`=Mode 3 (must match DUT) |
-| 2      | 1    | `data_bits`     | Frame size: `8` or `16` |
-| 3      | 1    | `miso_port`     | GPIO port for MISO |
-| 4      | 1    | `miso_pin`      | 0..15 |
-| 5      | 1    | `miso_af`       | Alternate-function number (typically 5) |
-| 6      | 1    | `sck_port`      | GPIO port for SCK |
-| 7      | 1    | `sck_pin`       | 0..15 |
-| 8      | 1    | `sck_af`        | Typically 5 |
-| 9      | 1    | `nss_port`      | GPIO port for NSS / CS |
-| 10     | 1    | `nss_pin`       | 0..15 |
-| 11     | 1    | `nss_af`        | Typically 5 (hardware NSS) |
-| 12     | 1    | `mosi_port`     | GPIO port for MOSI. `0xFF` = MOSI not wired / not recorded |
-| 13     | 1    | `mosi_pin`      | 0..15. Ignored if `mosi_port = 0xFF` |
-| 14     | 1    | `mosi_af`       | Ignored if `mosi_port = 0xFF` |
-| 15     | 2    | `tx_buf_len`    | u16 LE. Length of the initial TX buffer (1..`SPI_SLAVE_TX_BUF_MAX`) |
-| 17     | N    | `tx_buf`        | Initial response bytes (N = `tx_buf_len`) |
+| 2      | 1    | `miso_port`     | GPIO port for MISO |
+| 3      | 1    | `miso_pin`      | 0..15 |
+| 4      | 1    | `miso_af`       | Alternate-function number (typically 5) |
+| 5      | 1    | `sck_port`      | GPIO port for SCK |
+| 6      | 1    | `sck_pin`       | 0..15 |
+| 7      | 1    | `sck_af`        | Typically 5 |
+| 8      | 1    | `nss_port`      | GPIO port for NSS / CS |
+| 9      | 1    | `nss_pin`       | 0..15 |
+| 10     | 1    | `nss_af`        | Typically 5 (hardware NSS) |
+| 11     | 1    | `mosi_port`     | GPIO port for MOSI. `0xFF` = MOSI not wired / not recorded |
+| 12     | 1    | `mosi_pin`      | 0..15. Ignored if `mosi_port = 0xFF` |
+| 13     | 1    | `mosi_af`       | Ignored if `mosi_port = 0xFF` |
+| 14     | 2    | `tx_buf_len`    | u16 LE. Length of the initial TX buffer (1..`SPI_SLAVE_TX_BUF_MAX`) |
+| 16     | N    | `tx_buf`        | Initial response bytes (N = `tx_buf_len`) |
 
-Total: **17 + N bytes** (`tx_buf_len` is N).
+Total: **16 + N bytes** (`tx_buf_len` is N).
 
 The initial TX buffer is pre-loaded before the first NSS assertion.
 
@@ -152,10 +151,10 @@ layer.
 
 | Code | Name                    | When |
 |------|-------------------------|------|
-| 0x02 | `ERR_MALFORMED_PAYLOAD` | Setup shorter than 17 + `tx_buf_len` bytes; set-output shorter than 2 + `tx_buf_len` bytes |
+| 0x02 | `ERR_MALFORMED_PAYLOAD` | Setup shorter than 16 + `tx_buf_len` bytes; set-output shorter than 2 + `tx_buf_len` bytes |
 | 0x05 | `ERR_OUT_OF_RESOURCES`  | `tx_buf_len` exceeds `SPI_SLAVE_TX_BUF_MAX`; sensor manager full |
 | 0x06 | `ERR_INVALID_SENSOR_ID` | `sensor_id` not registered (set-output / stop) |
-| 0x07 | `ERR_INVALID_PARAMETER` | Any field out of range; unsupported `data_bits` value |
+| 0x07 | `ERR_INVALID_PARAMETER` | Any field out of range |
 | 0x08 | `ERR_PERIPHERAL_BUSY`   | The requested SPI peripheral is already claimed (as master or slave) |
 
 ## 8. Open questions / deferred
@@ -166,5 +165,5 @@ layer.
 - **Transaction-level callbacks** — notify the BBB after each NSS
   de-assertion (DUT completed a transaction).  Useful for emulating
   sensors that expose a "data-ready" flag.
-- **16-bit frame support** — `data_bits = 16` is listed but not
-  prioritised for initial implementation.
+- **16-bit frame support** — STM32F4 SPI supports DFF=1 for 16-bit frames;
+  deferred until a concrete sensor requires it.

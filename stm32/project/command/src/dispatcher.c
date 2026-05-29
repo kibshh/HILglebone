@@ -12,6 +12,7 @@
 #include "protocol_encoder.h"
 #include "pwm_sensor.h"
 #include "sensor_manager.h"
+#include "spi_slave_sensor.h"
 
 /* ── Command handlers ─────────────────────────────────────────────── */
 
@@ -64,6 +65,9 @@ static void handle_setup(const parsed_frame_t *f)
         break;
 
     case PROTO_ID_SPI:
+        err = spi_slave_sensor_setup(cfg, cfg_len, &sensor_id);
+        break;
+
     case PROTO_ID_DIGITAL_IN:
     case PROTO_ID_FREQ:
     case PROTO_ID_ONEWIRE:
@@ -130,6 +134,10 @@ static void handle_set_output(const parsed_frame_t *f)
         err = dac_sensor_set_output(slot->internal_id, values, values_len);
         break;
 
+    case PROTO_ID_SPI:
+        err = spi_slave_sensor_set_output(slot->internal_id, values, values_len);
+        break;
+
     default:
         err = ERR_INVALID_PARAMETER;
         break;
@@ -182,6 +190,10 @@ static void handle_stop(const parsed_frame_t *f)
         err = dac_sensor_stop(slot->internal_id);
         break;
 
+    case PROTO_ID_SPI:
+        err = spi_slave_sensor_stop(slot->internal_id);
+        break;
+
     default:
         err = ERR_INVALID_PARAMETER;
         break;
@@ -205,6 +217,7 @@ void dispatcher_init(void)
     digital_out_sensor_init();
     pwm_sensor_init();
     dac_sensor_init();
+    spi_slave_sensor_init();
 }
 
 void dispatcher_handle(const parsed_frame_t *frame)
