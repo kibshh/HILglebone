@@ -107,6 +107,10 @@ void gpio_configure_af(const gpio_af_config_t *cfg)
     GPIO_SET_AF   (gpio, pin, cfg->af);
     GPIO_SET_SPEED(gpio, pin, (uint32_t)cfg->speed);
     GPIO_SET_PULL (gpio, pin, (uint32_t)cfg->pull);
+    if (cfg->output_type == GPIO_OUTPUT_OPEN_DRAIN)
+        GPIO_SET_OTYPE_OD(gpio, pin);
+    else
+        GPIO_SET_OTYPE_PP(gpio, pin);
     GPIO_SET_MODER(gpio, pin, GPIO_MODER_AF);
 }
 

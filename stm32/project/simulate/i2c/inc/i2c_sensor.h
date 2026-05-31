@@ -1,15 +1,11 @@
 /**
  * I2C sensor emulation backend.
  *
- * For this iteration the backend owns the configuration and register map
- * and handles the protocol lifecycle (SETUP / SET_OUTPUT / STOP); the
- * actual I2C-slave hardware driver is not wired in yet. Adding it later
- * means hooking `i2c_sensor_setup()` into a real peripheral init and
- * letting the slave IRQ read from `i2c_sensor_state_t::regmap`.
- *
- * The on-wire payload layouts mirror `protocol/i2c-sensors-spec.md` §3 and §4;
- * all offsets into those payloads are pulled from the macros below so the
- * spec and the code can be cross-checked side by side.
+ * Manages the protocol lifecycle (SETUP / SET_OUTPUT / STOP) and drives the
+ * i2c_slave hardware driver.  The on-wire payload layouts mirror
+ * `protocol/i2c-sensors-spec.md` §3 and §4; all offsets into those payloads
+ * are pulled from the macros below so the spec and the code can be
+ * cross-checked side by side.
  */
 
 #ifndef I2C_SENSOR_H
@@ -48,22 +44,27 @@
 #define I2C_CFG_OFFSET_PRIMARY_ADDR         5U      /* u16 LE */
 #define I2C_CFG_OFFSET_SECONDARY_ADDR       7U      /* u16 LE */
 #define I2C_CFG_OFFSET_FLAGS                9U      /* u8    */
-#define I2C_CFG_OFFSET_REG_ADDR_WIDTH       10U     /* u8    */
-#define I2C_CFG_OFFSET_REG_ADDR_ENDIAN      11U     /* u8    */
-#define I2C_CFG_OFFSET_AUTO_INC_MODE        12U     /* u8    */
-#define I2C_CFG_OFFSET_REGISTER_COUNT       13U     /* u16 LE */
-#define I2C_CFG_OFFSET_RESPONSE_DELAY_US    15U     /* u16 LE */
-#define I2C_CFG_OFFSET_CLOCK_STRETCH_MAX_US 17U     /* u16 LE */
-#define I2C_CFG_OFFSET_HAS_PRESET           19U     /* u8    */
-#define I2C_CFG_OFFSET_PRESET_REG_START     20U     /* u16 LE (present only if has_preset) */
-#define I2C_CFG_OFFSET_PRESET_VALUES_LEN    22U     /* u16 LE (present only if has_preset) */
-#define I2C_CFG_OFFSET_PRESET_VALUES        24U     /* N bytes (present only if has_preset) */
+#define I2C_CFG_OFFSET_SCL_PORT             10U     /* u8    */
+#define I2C_CFG_OFFSET_SCL_PIN              11U     /* u8    */
+#define I2C_CFG_OFFSET_SCL_AF               12U     /* u8    */
+#define I2C_CFG_OFFSET_SDA_PORT             13U     /* u8    */
+#define I2C_CFG_OFFSET_SDA_PIN              14U     /* u8    */
+#define I2C_CFG_OFFSET_SDA_AF               15U     /* u8    */
+#define I2C_CFG_OFFSET_REG_ADDR_WIDTH       16U     /* u8    */
+#define I2C_CFG_OFFSET_AUTO_INC_MODE        17U     /* u8    */
+#define I2C_CFG_OFFSET_REGISTER_COUNT       18U     /* u16 LE */
+#define I2C_CFG_OFFSET_RESPONSE_DELAY_US    20U     /* u16 LE */
+#define I2C_CFG_OFFSET_CLOCK_STRETCH_MAX_US 22U     /* u16 LE */
+#define I2C_CFG_OFFSET_HAS_PRESET           24U     /* u8    */
+#define I2C_CFG_OFFSET_PRESET_REG_START     25U     /* u16 LE (present only if has_preset) */
+#define I2C_CFG_OFFSET_PRESET_VALUES_LEN    27U     /* u16 LE (present only if has_preset) */
+#define I2C_CFG_OFFSET_PRESET_VALUES        29U     /* N bytes (present only if has_preset) */
 
 #define I2C_CFG_HAS_PRESET_YES              1U
 #define I2C_CFG_HAS_PRESET_NO               0U
 
-#define I2C_CFG_SIZE_NO_PRESET              20U     /* bytes, when has_preset = 0 */
-#define I2C_CFG_SIZE_WITH_PRESET_HEADER     24U     /* bytes before preset_values */
+#define I2C_CFG_SIZE_NO_PRESET              25U     /* bytes, when has_preset = 0 */
+#define I2C_CFG_SIZE_WITH_PRESET_HEADER     29U     /* bytes before preset_values */
 
 /* ── Flags bitfield ───────────────────────────────────────────────── */
 
@@ -84,9 +85,6 @@
 #define I2C_REG_ADDR_WIDTH_NONE             0U
 #define I2C_REG_ADDR_WIDTH_8                1U
 #define I2C_REG_ADDR_WIDTH_16               2U
-
-#define I2C_REG_ADDR_ENDIAN_BIG             0U
-#define I2C_REG_ADDR_ENDIAN_LITTLE          1U
 
 #define I2C_AUTO_INC_MODE_NONE              0U
 #define I2C_AUTO_INC_MODE_READ              1U

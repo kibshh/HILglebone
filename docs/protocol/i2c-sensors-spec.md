@@ -60,22 +60,26 @@ starting at payload offset 0 (the `protocol_id` byte) and onward are:
 | 6      | 2    | `primary_addr`         | Device address, LE. 7-bit mode: bits 0..6. 10-bit mode: bits 0..9              |
 | 8      | 2    | `secondary_addr`       | Second address (7-bit mode only); `0x0000` = disabled                          |
 | 10     | 1    | `flags`                | Bitfield; see "Flags" below                                                    |
-| 11     | 1    | `reg_addr_width`       | `0` = no reg addressing (stream sensor), `1` = 8-bit, `2` = 16-bit             |
-| 12     | 1    | `reg_addr_endian`      | `0` = big-endian (most sensors), `1` = little-endian. Meaningful only when     |
-|        |      |                        | `reg_addr_width = 2`                                                           |
-| 13     | 1    | `auto_inc_mode`        | `0` = none, `1` = on read, `2` = on write, `3` = both                          |
-| 14     | 2    | `register_count`       | Number of 8-bit registers in the map, LE. Max: see "Memory budget"             |
-| 16     | 2    | `response_delay_us`    | Pre-data stretch after address match, µs, LE. `0` = no delay                   |
-| 18     | 2    | `clock_stretch_max_us` | Upper bound on clock stretching this sensor may do, µs, LE. `0` = no stretch   |
-| 20     | 1    | `has_preset`           | `0` = no preset block follows; `1` = preset block follows (see below)          |
-| 21     | 2    | `preset_reg_start`     | (only if `has_preset = 1`) Register offset where preset data starts, LE        |
-| 23     | 2    | `preset_value_len`     | (only if `has_preset = 1`) Number of bytes in the preset block, LE. Must `>= 1`|
-| 25     | N    | `preset_values`        | (only if `has_preset = 1`) `preset_value_len` raw bytes, written sequentially  |
+| 11     | 1    | `scl_port`             | SCL GPIO port: `0`=A, `1`=B, `2`=C, `3`=D, `4`=E, `5`=H                       |
+| 12     | 1    | `scl_pin`              | SCL GPIO pin number, `0`..`15`                                                  |
+| 13     | 1    | `scl_af`               | SCL alternate-function index, `0`..`15` (STM32F401RE datasheet AF table)        |
+| 14     | 1    | `sda_port`             | SDA GPIO port (same encoding as `scl_port`)                                     |
+| 15     | 1    | `sda_pin`              | SDA GPIO pin number, `0`..`15`                                                  |
+| 16     | 1    | `sda_af`               | SDA alternate-function index, `0`..`15`                                         |
+| 17     | 1    | `reg_addr_width`       | `0` = no reg addressing (stream sensor), `1` = 8-bit, `2` = 16-bit             |
+| 18     | 1    | `auto_inc_mode`        | `0` = none, `1` = on read, `2` = on write, `3` = both                          |
+| 19     | 2    | `register_count`       | Number of 8-bit registers in the map, LE. Max: see "Memory budget"             |
+| 21     | 2    | `response_delay_us`    | Pre-data stretch after address match, µs, LE. `0` = no delay                   |
+| 23     | 2    | `clock_stretch_max_us` | Upper bound on clock stretching this sensor may do, µs, LE. `0` = no stretch   |
+| 25     | 1    | `has_preset`           | `0` = no preset block follows; `1` = preset block follows (see below)          |
+| 26     | 2    | `preset_reg_start`     | (only if `has_preset = 1`) Register offset where preset data starts, LE        |
+| 28     | 2    | `preset_value_len`     | (only if `has_preset = 1`) Number of bytes in the preset block, LE. Must `>= 1`|
+| 30     | N    | `preset_values`        | (only if `has_preset = 1`) `preset_value_len` raw bytes, written sequentially  |
 
 Total size:
 
-- Without preset (`has_preset = 0`): **21 bytes**
-- With preset (`has_preset = 1`): **25 + preset_value_len bytes**
+- Without preset (`has_preset = 0`): **26 bytes**
+- With preset (`has_preset = 1`): **30 + preset_value_len bytes**
 
 ### 3.1 Preset block
 
@@ -124,9 +128,8 @@ with `CMD_SET_OUTPUT` for the rest.
 - `reg_addr_width = 1` Classic 8-bit register offset. DUT sends `START +
   addr + write + regaddr [+ repeated START + addr + read + bytes...]` or
   `START + addr + write + regaddr + data`.
-- `reg_addr_width = 2` 16-bit register offset. Byte order controlled by
-  `reg_addr_endian`. Used by sensors like ADXL345 (high-capacity addr map),
-  some EEPROMs.
+- `reg_addr_width = 2` 16-bit register offset. Always big-endian (MSB first).
+  Used by sensors like ADXL345 (high-capacity addr map), some EEPROMs.
 
 ### 3.4 Memory budget
 
@@ -266,8 +269,13 @@ CMD_SETUP_SENSOR payload:
   primary_addr        = 0x0076             (LE: 76 00)
   secondary_addr      = 0x0000             (disabled)
   flags               = 0x10
+  scl_port            = 1                  (GPIO_PORT_B)
+  scl_pin             = 6                  (PB6)
+  scl_af              = 4                  (AF4 = I2C1)
+  sda_port            = 1                  (GPIO_PORT_B)
+  sda_pin             = 7                  (PB7)
+  sda_af              = 4                  (AF4 = I2C1)
   reg_addr_width      = 1                  (8-bit register offsets)
-  reg_addr_endian     = 0                  (N/A when width=1)
   auto_inc_mode       = 1                  (on read)
   register_count      = 256                (LE: 00 01)
   response_delay_us   = 0

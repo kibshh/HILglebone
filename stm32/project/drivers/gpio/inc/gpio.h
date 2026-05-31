@@ -94,10 +94,11 @@ typedef struct
 
 typedef struct
 {
-    gpio_pin_t   pin;
-    uint8_t      af;      /* 0..GPIO_AF_MAX */
-    gpio_speed_t speed;
-    gpio_pull_t  pull;
+    gpio_pin_t          pin;
+    uint8_t             af;           /* 0..GPIO_AF_MAX */
+    gpio_speed_t        speed;
+    gpio_pull_t         pull;
+    gpio_output_type_t  output_type;  /* push-pull (default 0) or open-drain */
 } gpio_af_config_t;
 
 /* ── API ──────────────────────────────────────────────────────────── */
