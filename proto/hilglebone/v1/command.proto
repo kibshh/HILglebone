@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package hilglebone.v1;
+
+// go_package: set this to your Go module path when the backend is scaffolded.
+// option go_package = "github.com/kibshh/HILglebone/backend/gen/hilglebone/v1";
+
+import "hilglebone/v1/common.proto";
+
+// ── Command payloads ───────────────────────────────────────────────────────────
+
+// Maps to CMD_SETUP_SENSOR.
+// `config` is the protocol-specific config blob defined in the sensor spec;
+// the BBB re-encodes it into a STM32 binary frame without interpreting it.
+message SetupSensorCommand {
+  ProtocolId  protocol_id = 1;
+  bytes       config      = 2;
+}
+
+// Maps to CMD_SET_OUTPUT.
+// `sensor_id` is the external id returned by the BBB after setup.
+// `values` is the protocol-specific value blob (e.g. register range for I2C).
+message SetOutputCommand {
+  uint32 sensor_id = 1;
+  bytes  values    = 2;
+}
+
+// Maps to CMD_STOP_SENSOR.
+message StopSensorCommand {
+  uint32 sensor_id = 1;
+}
+
+// Maps to CMD_SCENARIO. Payload TBD — scenario engine is Phase 4.
+message ScenarioCommand {
+  bytes payload = 1;  // placeholder until the scenario schema is defined
+}
+
+// Maps to CMD_SYNC. No payload — triggers the handshake sequence.
+message SyncCommand {}
+
+// ── Envelope ───────────────────────────────────────────────────────────────────
+
+// Sent on subject: session.{session_id}.command
+message CommandEnvelope {
+  string message_id   = 1;  // UUID, for deduplication
+  string session_id   = 2;
+  string device_id    = 3;  // target BBB device
+  int64  timestamp_us = 4;  // unix microseconds (UTC)
+
+  oneof payload {
+    SetupSensorCommand setup_sensor = 10;
+    SetOutputCommand   set_output   = 11;
+    StopSensorCommand  stop_sensor  = 12;
+    ScenarioCommand    scenario     = 13;
+    SyncCommand        sync         = 14;
+  }
+}

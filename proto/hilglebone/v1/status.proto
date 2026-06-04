@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package hilglebone.v1;
+
+// go_package: set this to your Go module path when the backend is scaffolded.
+// option go_package = "github.com/kibshh/HILglebone/backend/gen/hilglebone/v1";
+
+import "hilglebone/v1/common.proto";
+
+// ── Device online state ────────────────────────────────────────────────────────
+
+enum OnlineStatus {
+  ONLINE_STATUS_UNSPECIFIED = 0;
+  ONLINE_STATUS_ONLINE      = 1;  // idle, accepting session assignment
+  ONLINE_STATUS_BUSY        = 2;  // in an active session
+  ONLINE_STATUS_OFFLINE     = 3;  // graceful shutdown published
+}
+
+// ── Envelope ───────────────────────────────────────────────────────────────────
+
+// Sent on subject: device.{device_id}.status
+// Published periodically (~30 s) by the BBB agent.
+// JetStream keeps max-msgs-per-subject=1, so only the latest is retained.
+// The backend determines liveness by comparing `timestamp_us` to wall clock.
+message StatusEnvelope {
+  string       device_id     = 1;
+  string       session_id    = 2;  // empty when not in a session
+  int64        timestamp_us  = 3;  // unix microseconds (UTC)
+  OnlineStatus online_status = 4;
+  Stm32State   stm32_state   = 5;
+}

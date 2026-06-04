@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package hilglebone.v1;
+
+// go_package: set this to your Go module path when the backend is scaffolded.
+// option go_package = "github.com/kibshh/HILglebone/backend/gen/hilglebone/v1";
+
+// Sent on subject: session.{session_id}.ota
+// Triggers the BBB to download firmware from `firmware_url` and flash the DUT.
+message OtaEnvelope {
+  string message_id      = 1;  // UUID
+  string session_id      = 2;
+  string device_id       = 3;  // target BBB
+  int64  timestamp_us    = 4;  // unix microseconds (UTC)
+  string firmware_url    = 5;  // short-lived signed URL (MinIO / S3)
+  string firmware_sha256 = 6;  // hex-encoded; BBB verifies before flashing
+  uint64 firmware_size   = 7;  // bytes; BBB cross-checks after download
+}

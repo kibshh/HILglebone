@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package hilglebone.v1;
+
+// go_package: set this to your Go module path when the backend is scaffolded.
+// option go_package = "github.com/kibshh/HILglebone/backend/gen/hilglebone/v1";
+
+// ── Protocol IDs ───────────────────────────────────────────────────────────────
+// Mirror BBB ProtocolId enum and STM32 protocol_id values.
+
+enum ProtocolId {
+  PROTOCOL_ID_UNSPECIFIED  = 0;
+  PROTOCOL_ID_I2C          = 1;
+  PROTOCOL_ID_SPI          = 2;
+  PROTOCOL_ID_DIGITAL_OUT  = 3;
+  PROTOCOL_ID_DIGITAL_IN   = 4;
+  PROTOCOL_ID_DAC          = 5;
+  PROTOCOL_ID_PWM          = 6;
+  PROTOCOL_ID_FREQ         = 7;
+  PROTOCOL_ID_ONEWIRE      = 8;
+  PROTOCOL_ID_CAN          = 9;
+}
+
+// ── STM32 synchronisation state ────────────────────────────────────────────────
+
+enum Stm32State {
+  STM32_STATE_UNSPECIFIED = 0;
+  STM32_STATE_SYNCED      = 1;  // CMD_SYNC handshake complete
+  STM32_STATE_UNSYNCED    = 2;  // not yet synchronised or lost sync
+  STM32_STATE_ERROR       = 3;  // STM32 reported a fatal error
+}

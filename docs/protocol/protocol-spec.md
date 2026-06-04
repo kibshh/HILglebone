@@ -254,6 +254,23 @@ Payload:
 | 0      | 1    | `sensor_id`  | `0x00` if the error is not sensor-scoped           |
 | 1      | 1    | `error_code` | Same code space as `RSP_ACK.error_code`            |
 
+## STATUS_REPORT
+
+**Unsolicited** periodic status frame emitted by the STM32 at a fixed interval
+(default every 5 seconds). It is not a response to any command and carries no
+`cmd_type` or sequence number. The BBB uses it to populate the `active_sensor_count`
+and `stm32_state` fields in its cloud heartbeat.
+
+Payload:
+
+| Offset | Size | Name                  | Description                                           |
+|--------|------|-----------------------|-------------------------------------------------------|
+| 0      | 4    | `uptime_s`            | Seconds since STM32 boot (u32 LE)                     |
+| 4      | 1    | `active_sensor_count` | Number of currently active sensor slots               |
+| 5      | 1    | `command_queue_depth` | Pending frames in the STM32 receive ring buffer       |
+
+Fixed payload size: **6 bytes**.
+
 ## Synchronization
 
 On startup, BBB sends `CMD_SYNC` every 100 ms until STM32 responds with
