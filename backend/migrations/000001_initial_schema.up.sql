@@ -21,7 +21,7 @@ CREATE TABLE users (
 CREATE TABLE bbb_devices (
     id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     name             TEXT        NOT NULL UNIQUE,
-    auth_token_hash  TEXT        NOT NULL,
+    auth_token_hash  TEXT        NOT NULL UNIQUE,
     status           TEXT        NOT NULL DEFAULT 'offline'
                                  CHECK (status IN ('online', 'busy', 'offline')),
     last_seen_at     TIMESTAMPTZ,

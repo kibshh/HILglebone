@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/kibshh/HILglebone/backend/internal/db"
 	"github.com/kibshh/HILglebone/backend/internal/server"
 )
 
@@ -19,21 +20,34 @@ const (
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
 
 	addr := os.Getenv("BACKEND_ADDR")
 	if addr == "" {
 		addr = defaultAddr
 	}
 
-	srv := server.New(addr, logger)
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		slog.Error("DATABASE_URL is required")
+		os.Exit(1)
+	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
+	pool, err := db.NewPool(ctx, dsn)
+	if err != nil {
+		slog.Error("db connect failed", "error", err)
+		os.Exit(1)
+	}
+	defer pool.Close()
+
+	srv := server.New(addr, pool)
+
 	serverErr := make(chan error, 1)
 	go func() {
-		logger.Info("server starting", "addr", addr)
+		slog.Info("server starting", "addr", addr)
 		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 			serverErr <- err
 		}
@@ -41,10 +55,10 @@ func main() {
 
 	select {
 	case <-ctx.Done():
-		logger.Info("shutdown signal received")
+		slog.Info("shutdown signal received")
 	case err := <-serverErr:
 		if err != nil {
-			logger.Error("server error", "error", err)
+			slog.Error("server error", "error", err)
 			os.Exit(1)
 		}
 	}
@@ -53,8 +67,8 @@ func main() {
 	defer shutdownCancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		logger.Error("graceful shutdown failed", "error", err)
+		slog.Error("graceful shutdown failed", "error", err)
 		os.Exit(1)
 	}
-	logger.Info("server stopped")
+	slog.Info("server stopped")
 }
