@@ -47,6 +47,23 @@ message SessionStartCommand {}
 // should release resources and stop emulating. Not relayed to the STM32.
 message SessionStopCommand {}
 
+// ── Runtime grouping ──────────────────────────────────────────────────────────
+//
+// RuntimeCommand wraps commands the BBB does NOT execute locally — it unwraps
+// and re-encodes the payload onto the UART link to the STM32. Keeping these
+// behind one envelope variant separates "things the BBB handles" (the
+// lifecycle messages above) from "things the BBB just relays" (everything
+// here) so the BBB's dispatch logic is a clean two-step.
+message RuntimeCommand {
+  oneof payload {
+    SetupSensorCommand setup_sensor = 1;
+    SetOutputCommand   set_output   = 2;
+    StopSensorCommand  stop_sensor  = 3;
+    ScenarioCommand    scenario     = 4;
+    SyncCommand        sync         = 5;
+  }
+}
+
 // ── Envelope ───────────────────────────────────────────────────────────────────
 
 // Sent on subject: session.{session_id}.command
@@ -57,12 +74,8 @@ message CommandEnvelope {
   int64  timestamp_us = 4;  // unix microseconds (UTC)
 
   oneof payload {
-    SetupSensorCommand  setup_sensor  = 10;
-    SetOutputCommand    set_output    = 11;
-    StopSensorCommand   stop_sensor   = 12;
-    ScenarioCommand     scenario      = 13;
-    SyncCommand         sync          = 14;
-    SessionStartCommand session_start = 15;
-    SessionStopCommand  session_stop  = 16;
+    SessionStartCommand session_start = 10;
+    SessionStopCommand  session_stop  = 11;
+    RuntimeCommand      runtime       = 12;
   }
 }
