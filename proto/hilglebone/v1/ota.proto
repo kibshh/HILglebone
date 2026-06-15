@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package hilglebone.v1;
 
-// go_package: set this to your Go module path when the backend is scaffolded.
-// option go_package = "github.com/kibshh/HILglebone/backend/gen/hilglebone/v1";
+// Go output path. Keep in sync with the backend module.
+option go_package = "github.com/kibshh/HILglebone/backend/gen/hilglebone/v1";
 
 // Sent on subject: session.{session_id}.ota
 // Triggers the BBB to download firmware from `firmware_url` and flash the DUT.

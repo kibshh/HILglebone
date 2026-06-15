@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package hilglebone.v1;
 
-// go_package: set this to your Go module path when the backend is scaffolded.
-// option go_package = "github.com/kibshh/HILglebone/backend/gen/hilglebone/v1";
+// Go output path. Keep in sync with the backend module.
+option go_package = "github.com/kibshh/HILglebone/backend/gen/hilglebone/v1";
 
 import "hilglebone/v1/common.proto";
 
@@ -38,6 +38,15 @@ message ScenarioCommand {
 // Maps to CMD_SYNC. No payload — triggers the handshake sequence.
 message SyncCommand {}
 
+// Cloud-only lifecycle notification: the backend has just allocated this
+// session to the BBB. The BBB should claim hardware resources and prepare
+// to receive command payloads. Not relayed to the STM32.
+message SessionStartCommand {}
+
+// Cloud-only lifecycle notification: the session has been ended. The BBB
+// should release resources and stop emulating. Not relayed to the STM32.
+message SessionStopCommand {}
+
 // ── Envelope ───────────────────────────────────────────────────────────────────
 
 // Sent on subject: session.{session_id}.command
@@ -48,10 +57,12 @@ message CommandEnvelope {
   int64  timestamp_us = 4;  // unix microseconds (UTC)
 
   oneof payload {
-    SetupSensorCommand setup_sensor = 10;
-    SetOutputCommand   set_output   = 11;
-    StopSensorCommand  stop_sensor  = 12;
-    ScenarioCommand    scenario     = 13;
-    SyncCommand        sync         = 14;
+    SetupSensorCommand  setup_sensor  = 10;
+    SetOutputCommand    set_output    = 11;
+    StopSensorCommand   stop_sensor   = 12;
+    ScenarioCommand     scenario      = 13;
+    SyncCommand         sync          = 14;
+    SessionStartCommand session_start = 15;
+    SessionStopCommand  session_stop  = 16;
   }
 }
