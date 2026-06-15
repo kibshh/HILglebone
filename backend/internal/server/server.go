@@ -10,6 +10,7 @@ import (
 
 	"github.com/kibshh/HILglebone/backend/internal/devices"
 	"github.com/kibshh/HILglebone/backend/internal/httpx"
+	"github.com/kibshh/HILglebone/backend/internal/sessions"
 )
 
 const readyPingTimeout = 2 * time.Second
@@ -18,10 +19,18 @@ func New(addr string, pool *pgxpool.Pool) *http.Server {
 	deviceSvc := devices.NewService(pool)
 	deviceHandler := devices.NewHandler(deviceSvc)
 
+	sessionSvc := sessions.NewService(pool)
+	sessionHandler := sessions.NewHandler(sessionSvc)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthz)
 	mux.HandleFunc("GET /readyz", readyz(pool))
 	mux.HandleFunc("POST /api/v1/devices/register", deviceHandler.Register)
+	mux.HandleFunc("POST /api/v1/sessions", sessionHandler.Allocate)
+	mux.HandleFunc("GET /api/v1/sessions", sessionHandler.List)
+	mux.HandleFunc("GET /api/v1/sessions/{id}", sessionHandler.Get)
+	mux.HandleFunc("POST /api/v1/sessions/{id}/start", sessionHandler.Start)
+	mux.HandleFunc("POST /api/v1/sessions/{id}/stop", sessionHandler.Stop)
 
 	return &http.Server{
 		Addr:              addr,
