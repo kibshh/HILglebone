@@ -10,16 +10,17 @@ import (
 
 	"github.com/kibshh/HILglebone/backend/internal/devices"
 	"github.com/kibshh/HILglebone/backend/internal/httpx"
+	"github.com/kibshh/HILglebone/backend/internal/natspub"
 	"github.com/kibshh/HILglebone/backend/internal/sessions"
 )
 
 const readyPingTimeout = 2 * time.Second
 
-func New(addr string, pool *pgxpool.Pool) *http.Server {
+func New(addr string, pool *pgxpool.Pool, publisher *natspub.Publisher) *http.Server {
 	deviceSvc := devices.NewService(pool)
 	deviceHandler := devices.NewHandler(deviceSvc)
 
-	sessionSvc := sessions.NewService(pool)
+	sessionSvc := sessions.NewService(pool, publisher)
 	sessionHandler := sessions.NewHandler(sessionSvc)
 
 	mux := http.NewServeMux()

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/kibshh/HILglebone/backend/internal/db"
+	"github.com/kibshh/HILglebone/backend/internal/natspub"
 	"github.com/kibshh/HILglebone/backend/internal/server"
 )
 
@@ -33,6 +34,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	natsURL := os.Getenv("NATS_URL")
+	if natsURL == "" {
+		slog.Error("NATS_URL is required")
+		os.Exit(1)
+	}
+
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
@@ -43,7 +50,14 @@ func main() {
 	}
 	defer pool.Close()
 
-	srv := server.New(addr, pool)
+	publisher, err := natspub.New(natsURL)
+	if err != nil {
+		slog.Error("nats connect failed", "error", err)
+		os.Exit(1)
+	}
+	defer publisher.Close()
+
+	srv := server.New(addr, pool, publisher)
 
 	serverErr := make(chan error, 1)
 	go func() {

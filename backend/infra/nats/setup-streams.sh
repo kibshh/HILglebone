@@ -32,7 +32,7 @@ upsert_stream() {
 
 upsert_stream COMMANDS \
     --subjects "session.*.command,session.*.ota" \
-    --retention workqueue \
+    --retention work \
     --storage file \
     --replicas 1 \
     --max-age 1h \

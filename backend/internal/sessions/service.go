@@ -11,7 +11,17 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	pb "github.com/kibshh/HILglebone/backend/gen/hilglebone/v1"
 )
+
+// CommandPublisher is the minimal interface the session service needs to
+// publish lifecycle events to the BBB. Implemented by natspub.Publisher.
+// The publisher derives the routing subject from env.SessionId so the
+// caller cannot accidentally route a message to the wrong session.
+type CommandPublisher interface {
+	PublishCommand(ctx context.Context, env *pb.CommandEnvelope) error
+}
 
 var (
 	ErrNotFound          = errors.New("session not found")
@@ -28,11 +38,12 @@ const (
 )
 
 type Service struct {
-	pool *pgxpool.Pool
+	pool      *pgxpool.Pool
+	publisher CommandPublisher
 }
 
-func NewService(pool *pgxpool.Pool) *Service {
-	return &Service{pool: pool}
+func NewService(pool *pgxpool.Pool, publisher CommandPublisher) *Service {
+	return &Service{pool: pool, publisher: publisher}
 }
 
 type Session struct {
@@ -120,35 +131,109 @@ func (s *Service) Start(ctx context.Context, id uuid.UUID) (*Session, error) {
 		id,
 	)
 	session, err := scanSession(row)
-	if err == nil {
-		slog.Info("session started", "session_id", id)
-		return session, nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return s.classifyTransitionFailure(ctx, id)
+		}
 		slog.Error("session start failed", "error", err, "session_id", id)
 		return nil, fmt.Errorf("start session: %w", err)
 	}
-	return s.classifyTransitionFailure(ctx, id)
+
+	if pubErr := s.publishLifecycle(ctx, session, &pb.CommandEnvelope{
+		Payload: &pb.CommandEnvelope_SessionStart{SessionStart: &pb.SessionStartCommand{}},
+	}); pubErr != nil {
+		s.revertStart(ctx, id, pubErr)
+		return nil, fmt.Errorf("publish session start: %w", pubErr)
+	}
+
+	slog.Info("session started", "session_id", id)
+	return session, nil
 }
 
 func (s *Service) Stop(ctx context.Context, id uuid.UUID) (*Session, error) {
-	row := s.pool.QueryRow(ctx,
-		`UPDATE sessions
-		 SET status = 'stopped', stopped_at = now(), updated_at = now()
-		 WHERE id = $1 AND status IN ('allocated', 'running')
-		 RETURNING `+sessionFields,
+	// We need the previous status so we can revert to it on publish failure.
+	// A single CTE runs the SELECT and the conditional UPDATE in one snapshot,
+	// then RETURNING surfaces both the updated row and the captured old status.
+	var session Session
+	var prevStatus string
+	err := s.pool.QueryRow(ctx,
+		`WITH prev AS (
+		    SELECT status FROM sessions WHERE id = $1
+		), updated AS (
+		    UPDATE sessions
+		    SET status = 'stopped', stopped_at = now(), updated_at = now()
+		    WHERE id = $1 AND status IN ('allocated', 'running')
+		    RETURNING `+sessionFields+`
+		)
+		SELECT u.id, u.user_id, u.bbb_device_id, u.dut_device_id, u.firmware_upload_id,
+		       u.status, u.started_at, u.stopped_at, u.created_at, u.updated_at,
+		       p.status
+		FROM updated u CROSS JOIN prev p`,
 		id,
+	).Scan(
+		&session.ID, &session.UserID, &session.BBBDeviceID, &session.DUTDeviceID, &session.FirmwareUploadID,
+		&session.Status, &session.StartedAt, &session.StoppedAt, &session.CreatedAt, &session.UpdatedAt,
+		&prevStatus,
 	)
-	session, err := scanSession(row)
-	if err == nil {
-		slog.Info("session stopped", "session_id", id)
-		return session, nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return s.classifyTransitionFailure(ctx, id)
+		}
 		slog.Error("session stop failed", "error", err, "session_id", id)
 		return nil, fmt.Errorf("stop session: %w", err)
 	}
-	return s.classifyTransitionFailure(ctx, id)
+
+	if pubErr := s.publishLifecycle(ctx, &session, &pb.CommandEnvelope{
+		Payload: &pb.CommandEnvelope_SessionStop{SessionStop: &pb.SessionStopCommand{}},
+	}); pubErr != nil {
+		s.revertStop(ctx, id, prevStatus, pubErr)
+		return nil, fmt.Errorf("publish session stop: %w", pubErr)
+	}
+
+	slog.Info("session stopped", "session_id", id)
+	return &session, nil
+}
+
+// publishLifecycle fills in the common envelope fields and publishes it to
+// the session's subject. Returns an error on publish failure so the caller
+// can revert the DB transition (strict consistency).
+func (s *Service) publishLifecycle(ctx context.Context, session *Session, env *pb.CommandEnvelope) error {
+	env.MessageId = uuid.NewString()
+	env.SessionId = session.ID.String()
+	env.DeviceId = session.BBBDeviceID.String()
+	env.TimestampUs = time.Now().UTC().UnixMicro()
+	return s.publisher.PublishCommand(ctx, env)
+}
+
+// revertStart undoes a Start transition when the publish failed. A rollback
+// failure here is logged loudly because it leaves the DB inconsistent with
+// the BBB's view — a human or reconciler will need to fix it.
+func (s *Service) revertStart(ctx context.Context, id uuid.UUID, pubErr error) {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE sessions
+		 SET status = 'allocated', started_at = NULL, updated_at = now()
+		 WHERE id = $1 AND status = 'running'`,
+		id,
+	)
+	if err != nil {
+		slog.Error("session start rollback failed",
+			"error", err, "publish_error", pubErr, "session_id", id)
+	}
+}
+
+// revertStop undoes a Stop transition when the publish failed.
+func (s *Service) revertStop(ctx context.Context, id uuid.UUID, prevStatus string, pubErr error) {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE sessions
+		 SET status = $2, stopped_at = NULL, updated_at = now()
+		 WHERE id = $1 AND status = 'stopped'`,
+		id, prevStatus,
+	)
+	if err != nil {
+		slog.Error("session stop rollback failed",
+			"error", err, "publish_error", pubErr,
+			"session_id", id, "prev_status", prevStatus)
+	}
 }
 
 // classifyTransitionFailure disambiguates a no-op UPDATE: was the session
