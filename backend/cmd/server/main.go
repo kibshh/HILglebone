@@ -12,6 +12,7 @@ import (
 
 	"github.com/kibshh/HILglebone/backend/internal/db"
 	"github.com/kibshh/HILglebone/backend/internal/natspub"
+	"github.com/kibshh/HILglebone/backend/internal/natssub"
 	"github.com/kibshh/HILglebone/backend/internal/server"
 )
 
@@ -50,12 +51,19 @@ func main() {
 	}
 	defer pool.Close()
 
-	publisher, err := natspub.New(natsURL)
+	publisher, err := natspub.Open(natsURL)
 	if err != nil {
-		slog.Error("nats connect failed", "error", err)
+		slog.Error("nats publisher open failed", "error", err)
 		os.Exit(1)
 	}
 	defer publisher.Close()
+
+	subscriber, err := natssub.Open(natsURL, pool)
+	if err != nil {
+		slog.Error("nats subscriber open failed", "error", err)
+		os.Exit(1)
+	}
+	defer subscriber.Close()
 
 	srv := server.New(addr, pool, publisher)
 

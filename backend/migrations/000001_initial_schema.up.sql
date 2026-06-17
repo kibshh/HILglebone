@@ -19,15 +19,23 @@ CREATE TABLE users (
 -- `capabilities` is a free-form JSON blob: supported protocols, peripheral counts,
 -- firmware version, etc. — interpreted by the orchestrator, not by SQL.
 CREATE TABLE bbb_devices (
-    id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    name             TEXT        NOT NULL UNIQUE,
-    auth_token_hash  TEXT        NOT NULL UNIQUE,
-    status           TEXT        NOT NULL DEFAULT 'offline'
-                                 CHECK (status IN ('online', 'busy', 'offline')),
-    last_seen_at     TIMESTAMPTZ,
-    capabilities     JSONB       NOT NULL DEFAULT '{}'::jsonb,
-    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+    id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    name                TEXT        NOT NULL UNIQUE,
+    auth_token_hash     TEXT        NOT NULL UNIQUE,
+    status              TEXT        NOT NULL DEFAULT 'offline'
+                                    CHECK (status IN ('online', 'busy', 'offline')),
+    -- BBB self-reports these via device.{id}.status heartbeats.
+    -- `current_session_id` is the session the BBB claims to be in (NULL if idle).
+    -- It is intentionally NOT foreign-keyed to sessions(id) so a transient
+    -- inconsistency between the BBB's view and the sessions table doesn't
+    -- block the heartbeat reconciliation.
+    current_session_id  UUID,
+    stm32_state         TEXT        NOT NULL DEFAULT 'unknown'
+                                    CHECK (stm32_state IN ('unknown', 'synced', 'unsynced', 'error')),
+    last_seen_at        TIMESTAMPTZ,
+    capabilities        JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX bbb_devices_status_idx ON bbb_devices (status);
 

@@ -35,7 +35,7 @@ type Publisher struct {
 	js nats.JetStreamContext
 }
 
-func New(url string) (*Publisher, error) {
+func Open(url string) (*Publisher, error) {
 	if url == "" {
 		return nil, errors.New("nats url is empty")
 	}
