@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/kibshh/HILglebone/backend/internal/bus"
 	"github.com/kibshh/HILglebone/backend/internal/db"
 	"github.com/kibshh/HILglebone/backend/internal/natspub"
 	"github.com/kibshh/HILglebone/backend/internal/natssub"
@@ -51,6 +52,8 @@ func main() {
 	}
 	defer pool.Close()
 
+	eventBus := bus.New()
+
 	publisher, err := natspub.Open(natsURL)
 	if err != nil {
 		slog.Error("nats publisher open failed", "error", err)
@@ -58,14 +61,14 @@ func main() {
 	}
 	defer publisher.Close()
 
-	subscriber, err := natssub.Open(natsURL, pool)
+	subscriber, err := natssub.Open(natsURL, pool, eventBus)
 	if err != nil {
 		slog.Error("nats subscriber open failed", "error", err)
 		os.Exit(1)
 	}
 	defer subscriber.Close()
 
-	srv := server.New(addr, pool, publisher)
+	srv := server.New(addr, pool, publisher, eventBus)
 
 	serverErr := make(chan error, 1)
 	go func() {

@@ -20,9 +20,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	pb "github.com/kibshh/HILglebone/backend/gen/hilglebone/v1"
+	"github.com/kibshh/HILglebone/backend/internal/bus"
 )
 
 const (
@@ -36,17 +38,22 @@ type Subscriber struct {
 	nc   *nats.Conn
 	js   nats.JetStreamContext
 	pool *pgxpool.Pool
+	bus  *bus.Bus
 }
 
 // Open connects to NATS, attaches the status and telemetry subscriptions,
 // and returns a live Subscriber. The subscriptions begin delivering as soon
-// as Open returns; Close drains them.
-func Open(url string, pool *pgxpool.Pool) (*Subscriber, error) {
+// as Open returns; Close drains them. The bus parameter receives JSON-encoded
+// events that WebSocket handlers (or other consumers) can fan out.
+func Open(url string, pool *pgxpool.Pool, b *bus.Bus) (*Subscriber, error) {
 	if url == "" {
 		return nil, errors.New("nats url is empty")
 	}
 	if pool == nil {
 		return nil, errors.New("db pool is nil")
+	}
+	if b == nil {
+		return nil, errors.New("bus is nil")
 	}
 	nc, err := nats.Connect(url,
 		nats.Timeout(connectTimeout),
@@ -61,7 +68,7 @@ func Open(url string, pool *pgxpool.Pool) (*Subscriber, error) {
 		nc.Close()
 		return nil, fmt.Errorf("jetstream context: %w", err)
 	}
-	s := &Subscriber{nc: nc, js: js, pool: pool}
+	s := &Subscriber{nc: nc, js: js, pool: pool, bus: b}
 
 	if _, err := s.js.Subscribe(statusSubject, s.handleStatus,
 		nats.DeliverLastPerSubject(),
@@ -94,10 +101,15 @@ func (s *Subscriber) Close() {
 func (s *Subscriber) handleStatus(msg *nats.Msg) {
 	var env pb.StatusEnvelope
 	if err := proto.Unmarshal(msg.Data, &env); err != nil {
+		// Parse failure → no data to broadcast and nothing to persist.
 		slog.Error("status unmarshal failed", "error", err, "subject", msg.Subject)
 		_ = msg.Ack()
 		return
 	}
+	// Broadcast first: WS clients should see the event even if persistence
+	// fails or the envelope is missing fields the DB needs.
+	s.publishToBus(&env, "device_status")
+
 	statusStr := mapOnlineStatus(env.OnlineStatus)
 	if statusStr == "" {
 		slog.Warn("status envelope has unknown OnlineStatus",
@@ -154,6 +166,35 @@ func (s *Subscriber) handleStatus(msg *nats.Msg) {
 	_ = msg.Ack()
 }
 
+// publishToBus serialises a status or telemetry envelope to JSON and pushes
+// it onto the in-memory bus. Any other proto type is a programmer error and
+// is dropped with an Error log.
+func (s *Subscriber) publishToBus(env proto.Message, eventType string) {
+	var sessionID, deviceID string
+	switch e := env.(type) {
+	case *pb.StatusEnvelope:
+		sessionID, deviceID = e.SessionId, e.DeviceId
+	case *pb.TelemetryEnvelope:
+		sessionID, deviceID = e.SessionId, e.DeviceId
+	default:
+		slog.Error("publishToBus: unsupported envelope type",
+			"type", fmt.Sprintf("%T", env), "event_type", eventType)
+		return
+	}
+
+	payload, err := protojson.Marshal(env)
+	if err != nil {
+		slog.Error("bus marshal failed", "error", err, "event_type", eventType)
+		return
+	}
+	s.bus.Publish(bus.Event{
+		SessionID: sessionID,
+		DeviceID:  deviceID,
+		Type:      eventType,
+		JSON:      payload,
+	})
+}
+
 // optionalString returns nil for empty strings so pgx serialises SQL NULL.
 // Used for `current_session_id`: when the BBB reports no session, the column
 // must be NULL (UUID columns have no sensible sentinel value).
@@ -171,18 +212,22 @@ func (s *Subscriber) handleTelemetry(msg *nats.Msg) {
 		_ = msg.Ack()
 		return
 	}
+	eventType := "telemetry_unknown"
 	switch p := env.Payload.(type) {
 	case *pb.TelemetryEnvelope_Ack:
+		eventType = "telemetry_ack"
 		slog.Info("telemetry ack",
 			"device_id", env.DeviceId, "session_id", env.SessionId,
 			"sequence_num", p.Ack.SequenceNum, "cmd_type", p.Ack.CmdType,
 			"error_code", p.Ack.ErrorCode, "sensor_id", p.Ack.SensorId)
 	case *pb.TelemetryEnvelope_Error:
+		eventType = "telemetry_error"
 		slog.Warn("telemetry error",
 			"device_id", env.DeviceId, "session_id", env.SessionId,
 			"sensor_id", p.Error.SensorId, "error_code", p.Error.ErrorCode,
 			"detail", p.Error.Detail)
 	case *pb.TelemetryEnvelope_StatusReport:
+		eventType = "telemetry_status_report"
 		slog.Info("telemetry status_report",
 			"device_id", env.DeviceId, "uptime_s", p.StatusReport.UptimeS,
 			"active_sensors", p.StatusReport.ActiveSensorCount,
@@ -190,6 +235,7 @@ func (s *Subscriber) handleTelemetry(msg *nats.Msg) {
 	default:
 		slog.Warn("telemetry envelope has no payload variant", "device_id", env.DeviceId)
 	}
+	s.publishToBus(&env, eventType)
 	_ = msg.Ack()
 }
 

@@ -2,6 +2,7 @@ package sessions
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -13,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	pb "github.com/kibshh/HILglebone/backend/gen/hilglebone/v1"
+	"github.com/kibshh/HILglebone/backend/internal/bus"
 )
 
 // CommandPublisher is the minimal interface the session service needs to
@@ -40,10 +42,11 @@ const (
 type Service struct {
 	pool      *pgxpool.Pool
 	publisher CommandPublisher
+	bus       *bus.Bus
 }
 
-func NewService(pool *pgxpool.Pool, publisher CommandPublisher) *Service {
-	return &Service{pool: pool, publisher: publisher}
+func NewService(pool *pgxpool.Pool, publisher CommandPublisher, b *bus.Bus) *Service {
+	return &Service{pool: pool, publisher: publisher, bus: b}
 }
 
 type Session struct {
@@ -147,6 +150,7 @@ func (s *Service) Start(ctx context.Context, id uuid.UUID) (*Session, error) {
 	}
 
 	slog.Info("session started", "session_id", id)
+	s.publishToBus(session, "session_start")
 	return session, nil
 }
 
@@ -191,7 +195,26 @@ func (s *Service) Stop(ctx context.Context, id uuid.UUID) (*Session, error) {
 	}
 
 	slog.Info("session stopped", "session_id", id)
+	s.publishToBus(&session, "session_stop")
 	return &session, nil
+}
+
+
+// publishToBus pushes a lifecycle event onto the in-memory bus so WebSocket
+// clients listening on this session can react. Called only after the NATS
+// publish succeeds, so the bus event reflects the same state the BBB sees.
+func (s *Service) publishToBus(session *Session, eventType string) {
+	payload, err := json.Marshal(session)
+	if err != nil {
+		slog.Error("bus marshal failed", "error", err, "event_type", eventType, "session_id", session.ID)
+		return
+	}
+	s.bus.Publish(bus.Event{
+		SessionID: session.ID.String(),
+		DeviceID:  session.BBBDeviceID.String(),
+		Type:      eventType,
+		JSON:      payload,
+	})
 }
 
 // publishLifecycle fills in the common envelope fields and publishes it to

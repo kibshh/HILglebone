@@ -8,20 +8,24 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kibshh/HILglebone/backend/internal/bus"
 	"github.com/kibshh/HILglebone/backend/internal/devices"
 	"github.com/kibshh/HILglebone/backend/internal/httpx"
 	"github.com/kibshh/HILglebone/backend/internal/natspub"
 	"github.com/kibshh/HILglebone/backend/internal/sessions"
+	"github.com/kibshh/HILglebone/backend/internal/ws"
 )
 
 const readyPingTimeout = 2 * time.Second
 
-func New(addr string, pool *pgxpool.Pool, publisher *natspub.Publisher) *http.Server {
+func New(addr string, pool *pgxpool.Pool, publisher *natspub.Publisher, b *bus.Bus) *http.Server {
 	deviceSvc := devices.NewService(pool)
 	deviceHandler := devices.NewHandler(deviceSvc)
 
-	sessionSvc := sessions.NewService(pool, publisher)
+	sessionSvc := sessions.NewService(pool, publisher, b)
 	sessionHandler := sessions.NewHandler(sessionSvc)
+
+	wsHandler := ws.NewHandler(pool, b)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthz)
@@ -32,6 +36,7 @@ func New(addr string, pool *pgxpool.Pool, publisher *natspub.Publisher) *http.Se
 	mux.HandleFunc("GET /api/v1/sessions/{id}", sessionHandler.Get)
 	mux.HandleFunc("POST /api/v1/sessions/{id}/start", sessionHandler.Start)
 	mux.HandleFunc("POST /api/v1/sessions/{id}/stop", sessionHandler.Stop)
+	mux.HandleFunc("GET /ws/sessions/{id}/telemetry", wsHandler.Telemetry)
 
 	return &http.Server{
 		Addr:              addr,
@@ -83,3 +88,8 @@ func (s *statusWriter) WriteHeader(code int) {
 	s.status = code
 	s.ResponseWriter.WriteHeader(code)
 }
+
+// Unwrap lets http.NewResponseController (used by WebSocket upgraders) reach
+// the underlying ResponseWriter so it can hijack the connection. Without
+// this, a request through withLogging gets 501 on Upgrade.
+func (s *statusWriter) Unwrap() http.ResponseWriter { return s.ResponseWriter }
