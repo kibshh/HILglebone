@@ -101,9 +101,15 @@ func (c *Config) requiredMissing() []string {
 		{"DATABASE_URL", c.DatabaseURL},
 		{"NATS_URL", c.NATSURL},
 		{"MINIO_ENDPOINT", c.MinIOEndpoint},
-		{"MINIO_ACCESS_KEY", c.MinIOAccessKey},
-		{"MINIO_SECRET_KEY", c.MinIOSecretKey},
 		{"MINIO_BUCKET", c.MinIOBucket},
+	}
+	// Credentials are required in production only. In development, MinIO
+	// may run anonymously or with implicit auth from a local docker setup.
+	if c.Mode == ModeProduction {
+		pairs = append(pairs,
+			struct{ name, value string }{"MINIO_ACCESS_KEY", c.MinIOAccessKey},
+			struct{ name, value string }{"MINIO_SECRET_KEY", c.MinIOSecretKey},
+		)
 	}
 	var missing []string
 	for _, p := range pairs {

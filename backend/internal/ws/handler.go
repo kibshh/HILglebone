@@ -40,12 +40,13 @@ const (
 )
 
 type Handler struct {
-	pool *pgxpool.Pool
-	bus  *bus.Bus
+	pool           *pgxpool.Pool
+	bus            *bus.Bus
+	allowedOrigins []string // empty = accept any origin (development only)
 }
 
-func NewHandler(pool *pgxpool.Pool, b *bus.Bus) *Handler {
-	return &Handler{pool: pool, bus: b}
+func NewHandler(pool *pgxpool.Pool, b *bus.Bus, allowedOrigins []string) *Handler {
+	return &Handler{pool: pool, bus: b, allowedOrigins: allowedOrigins}
 }
 
 // Telemetry serves GET /ws/sessions/{id}/telemetry.
@@ -69,9 +70,11 @@ func (h *Handler) Telemetry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// allowedOrigins is set in production; empty in development.
+	// InsecureSkipVerify is only flipped on when no patterns are configured.
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		// TODO: lock down OriginPatterns once a frontend origin is known.
-		InsecureSkipVerify: true,
+		OriginPatterns:     h.allowedOrigins,
+		InsecureSkipVerify: len(h.allowedOrigins) == 0,
 	})
 	if err != nil {
 		slog.Error("ws upgrade failed", "error", err)

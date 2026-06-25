@@ -11,41 +11,31 @@ import (
 	"time"
 
 	"github.com/kibshh/HILglebone/backend/internal/bus"
+	"github.com/kibshh/HILglebone/backend/internal/config"
 	"github.com/kibshh/HILglebone/backend/internal/db"
+	"github.com/kibshh/HILglebone/backend/internal/firmware"
 	"github.com/kibshh/HILglebone/backend/internal/natspub"
 	"github.com/kibshh/HILglebone/backend/internal/natssub"
 	"github.com/kibshh/HILglebone/backend/internal/server"
 )
 
-const (
-	defaultAddr     = ":8080"
-	shutdownTimeout = 10 * time.Second
-)
+const shutdownTimeout = 10 * time.Second
 
 func main() {
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
-
-	addr := os.Getenv("BACKEND_ADDR")
-	if addr == "" {
-		addr = defaultAddr
-	}
-
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		slog.Error("DATABASE_URL is required")
+	cfg, err := config.Load()
+	if err != nil {
+		// Use a fallback handler since LogLevel isn't loaded yet.
+		slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+		slog.Error("config load failed", "error", err)
 		os.Exit(1)
 	}
-
-	natsURL := os.Getenv("NATS_URL")
-	if natsURL == "" {
-		slog.Error("NATS_URL is required")
-		os.Exit(1)
-	}
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.LogLevel})))
+	slog.Info("config loaded", "mode", cfg.Mode)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	pool, err := db.NewPool(ctx, dsn)
+	pool, err := db.NewPool(ctx, cfg.DatabaseURL)
 	if err != nil {
 		slog.Error("db connect failed", "error", err)
 		os.Exit(1)
@@ -54,25 +44,37 @@ func main() {
 
 	eventBus := bus.New()
 
-	publisher, err := natspub.Open(natsURL)
+	publisher, err := natspub.Open(cfg.NATSURL)
 	if err != nil {
 		slog.Error("nats publisher open failed", "error", err)
 		os.Exit(1)
 	}
 	defer publisher.Close()
 
-	subscriber, err := natssub.Open(natsURL, pool, eventBus)
+	subscriber, err := natssub.Open(cfg.NATSURL, pool, eventBus)
 	if err != nil {
 		slog.Error("nats subscriber open failed", "error", err)
 		os.Exit(1)
 	}
 	defer subscriber.Close()
 
-	srv := server.New(addr, pool, publisher, eventBus)
+	mc, err := firmware.OpenStorage(ctx, firmware.StorageConfig{
+		Endpoint:  cfg.MinIOEndpoint,
+		AccessKey: cfg.MinIOAccessKey,
+		SecretKey: cfg.MinIOSecretKey,
+		Bucket:    cfg.MinIOBucket,
+		UseSSL:    cfg.MinIOUseSSL,
+	})
+	if err != nil {
+		slog.Error("minio open failed", "error", err)
+		os.Exit(1)
+	}
+
+	srv := server.New(cfg.BackendAddr, pool, publisher, eventBus, mc, cfg.MinIOBucket, cfg.WSAllowedOrigins)
 
 	serverErr := make(chan error, 1)
 	go func() {
-		slog.Info("server starting", "addr", addr)
+		slog.Info("server starting", "addr", cfg.BackendAddr)
 		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 			serverErr <- err
 		}
