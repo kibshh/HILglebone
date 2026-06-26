@@ -11,7 +11,25 @@ services:
     command: ["-c", "/etc/nats/nats.conf"]
     restart: unless-stopped
 
-  # postgresql and minio will be added later
+  minio:
+    image: minio/minio:latest
+    container_name: hilglebone-minio
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Console UI (http://localhost:9001)
+    environment:
+      # DEV CREDENTIALS — do not use in production. Override via env vars or a
+      # separate compose file (e.g. docker-compose.prod.yml + a secret store)
+      # before any deployment that is reachable beyond localhost.
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio_data:/data
+    command: ["server", "/data", "--console-address", ":9001"]
+    restart: unless-stopped
+
+  # postgresql will be added later
 
 volumes:
   nats_data:
+  minio_data:
