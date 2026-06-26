@@ -7,9 +7,11 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/minio/minio-go/v7"
 
 	"github.com/kibshh/HILglebone/backend/internal/bus"
 	"github.com/kibshh/HILglebone/backend/internal/devices"
+	"github.com/kibshh/HILglebone/backend/internal/firmware"
 	"github.com/kibshh/HILglebone/backend/internal/httpx"
 	"github.com/kibshh/HILglebone/backend/internal/natspub"
 	"github.com/kibshh/HILglebone/backend/internal/sessions"
@@ -18,14 +20,25 @@ import (
 
 const readyPingTimeout = 2 * time.Second
 
-func New(addr string, pool *pgxpool.Pool, publisher *natspub.Publisher, b *bus.Bus) *http.Server {
+func New(
+	addr string,
+	pool *pgxpool.Pool,
+	publisher *natspub.Publisher,
+	b *bus.Bus,
+	mc *minio.Client,
+	firmwareBucket string,
+	wsAllowedOrigins []string,
+) *http.Server {
 	deviceSvc := devices.NewService(pool)
 	deviceHandler := devices.NewHandler(deviceSvc)
 
 	sessionSvc := sessions.NewService(pool, publisher, b)
 	sessionHandler := sessions.NewHandler(sessionSvc)
 
-	wsHandler := ws.NewHandler(pool, b)
+	wsHandler := ws.NewHandler(pool, b, wsAllowedOrigins)
+
+	firmwareSvc := firmware.NewService(pool, mc, firmwareBucket)
+	firmwareHandler := firmware.NewHandler(firmwareSvc)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthz)
@@ -36,6 +49,7 @@ func New(addr string, pool *pgxpool.Pool, publisher *natspub.Publisher, b *bus.B
 	mux.HandleFunc("GET /api/v1/sessions/{id}", sessionHandler.Get)
 	mux.HandleFunc("POST /api/v1/sessions/{id}/start", sessionHandler.Start)
 	mux.HandleFunc("POST /api/v1/sessions/{id}/stop", sessionHandler.Stop)
+	mux.HandleFunc("POST /api/v1/firmware", firmwareHandler.Upload)
 	mux.HandleFunc("GET /ws/sessions/{id}/telemetry", wsHandler.Telemetry)
 
 	return &http.Server{
