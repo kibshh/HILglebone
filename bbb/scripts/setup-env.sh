@@ -5,12 +5,13 @@
 #
 # MUST be sourced (so the activate persists in your shell):
 #
-#   source ./bbb/setup-env.sh
+#   source ./bbb/scripts/setup-env.sh
 #
 # Editor interpreter: bbb/.venv/bin/python
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VENV_DIR="$SCRIPT_DIR/.venv"
+BBB_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+VENV_DIR="$BBB_DIR/.venv"
 
 if [ ! -d "$VENV_DIR" ]; then
     echo "Creating venv at $VENV_DIR"
@@ -20,7 +21,7 @@ fi
 
 echo "Installing hilglebone-bbb[dev] (editable) ..."
 "$VENV_DIR/bin/pip" install --upgrade pip >/dev/null || return 1
-"$VENV_DIR/bin/pip" install -e "$SCRIPT_DIR[dev]" >/dev/null || return 1
+"$VENV_DIR/bin/pip" install -e "$BBB_DIR[dev]" >/dev/null || return 1
 
 # shellcheck source=/dev/null
 source "$VENV_DIR/bin/activate"

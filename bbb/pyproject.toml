@@ -12,6 +12,7 @@ dependencies = [
     "nats-py>=2.6",      # NATS JetStream client
     "pyserial>=3.5",     # STM32 UART bridge
     "httpx>=0.27",       # HTTP client to the cloud backend
+    "protobuf>=5.27",    # wire format for cloud-side envelopes
 ]
 
 [project.optional-dependencies]
@@ -25,7 +26,7 @@ dev = [
 [tool.hatch.build.targets.wheel]
 # bbb/ is the source root — packages are imported as `protocol`, `comms`, etc.
 sources = ["."]
-packages = ["protocol", "comms", "orchestrator", "log_setup", "scenarios"]
+packages = ["protocol", "comms", "orchestrator", "log_setup", "scenarios", "hilglebone"]
 
 # ── Ruff ──────────────────────────────────────────────────────────────
 
@@ -43,6 +44,12 @@ ignore = ["E501"]   # line length enforced by formatter, not linter
 python_version = "3.11"
 strict = true
 files = ["protocol", "comms", "orchestrator", "log_setup", "scenarios"]
+
+# Generated proto code does not satisfy strict mypy; treat as opaque.
+[[tool.mypy.overrides]]
+module = "hilglebone.*"
+ignore_errors = true
+ignore_missing_imports = true
 
 # ── Pytest ────────────────────────────────────────────────────────────
 
