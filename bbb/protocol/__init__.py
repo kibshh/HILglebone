@@ -46,6 +46,8 @@ from .constants import (
     HEADER_SIZE,
     MAX_PAYLOAD_SIZE,
     START_BYTE,
+    DacChannel,
+    DacReference,
     DigitalLevel,
     DigitalOutputType,
     DigitalPort,
@@ -54,6 +56,8 @@ from .constants import (
     DigitalSpeed,
     DigitalTimerKind,
     PwmChannel,
+    SpiMode,
+    SpiPeripheral,
     ErrorCode,
     FrameType,
     I2cAddressMode,
@@ -73,6 +77,12 @@ from .encoder import (
     encode_frame,
     parse_ack,
     parse_error_response,
+)
+from .dac import (
+    DacConfig,
+    pack_dac_cfg,
+    pack_dac_set_output,
+    LDAC_DISABLED_PORT,
 )
 from .digital_io import (
     DigitalOutConfig,
@@ -139,6 +149,15 @@ __all__ = [
     "DigitalLevel",
     "DigitalTimerKind",
     "HwTimerId",
+    # DAC backend
+    "DacConfig",
+    "pack_dac_cfg",
+    "pack_dac_set_output",
+    "LDAC_DISABLED_PORT",
+    "DacChannel",
+    "DacReference",
+    "SpiPeripheral",
+    "SpiMode",
     # PWM backend
     "PwmConfig",
     "pack_pwm_cfg",

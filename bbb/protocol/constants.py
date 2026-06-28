@@ -99,6 +99,34 @@ class I2cFlag(IntFlag):
     INTERNAL_PULLUPS     = 1 << 5
     CLOCK_STRETCH_ENABLE = 1 << 6
 
+# ── DAC field enumerants ───────────────────────────────────────────
+
+class DacChannel(IntEnum):
+    A = 0
+    B = 1
+    C = 2
+    D = 3
+    E = 4
+    F = 5
+    G = 6
+    H = 7
+
+class DacReference(IntEnum):
+    EXTERNAL        = 0
+    INTERNAL_STATIC = 1   # always on; higher power, no wake-up delay
+    INTERNAL_FLEX   = 2   # powers down between conversions; ~10 µs wake-up
+
+class SpiPeripheral(IntEnum):
+    SPI1 = 0   # APB2, max 42 MHz
+    SPI2 = 1   # APB1, max 21 MHz
+
+class SpiMode(IntEnum):
+    """Standard SPI modes. Bit 1 = CPOL, bit 0 = CPHA."""
+    MODE_0 = 0  # CPOL=0, CPHA=0 — idle low,  sample on rising
+    MODE_1 = 1  # CPOL=0, CPHA=1 — idle low,  sample on falling  (DAC8568 default)
+    MODE_2 = 2  # CPOL=1, CPHA=0 — idle high, sample on falling
+    MODE_3 = 3  # CPOL=1, CPHA=1 — idle high, sample on rising
+
 # ── Digital output field enumerants ────────────────────────────────
 
 class DigitalPort(IntEnum):
