@@ -1,5 +1,9 @@
-// Package natspub publishes session-scoped commands to NATS, routing each
-// envelope to its session's subject so the right BBB consumer receives it.
+// Package natspub publishes commands to NATS, routing each envelope to the
+// target BBB's device-scoped subject. session_id is carried in the envelope
+// body for the BBB to sanity-check against its current session, but it is
+// not used for routing — routing is by device_id so each BBB has its own
+// subject and the workqueue stream's "delivered to exactly one consumer"
+// semantics are unambiguous.
 package natspub
 
 import (
@@ -15,8 +19,8 @@ import (
 )
 
 const (
-	commandSubjectFmt = "session.%s.command"
-	otaSubjectFmt     = "session.%s.ota"
+	commandSubjectFmt = "device.%s.command"
+	otaSubjectFmt     = "device.%s.ota"
 	connectTimeout    = 5 * time.Second
 	publishTimeout    = 3 * time.Second
 )
@@ -62,15 +66,15 @@ func (p *Publisher) Close() {
 	_ = p.nc.Drain()
 }
 
-// PublishCommand marshals env and publishes it to session.{session_id}.command
+// PublishCommand marshals env and publishes it to device.{device_id}.command
 // via JetStream. The publish blocks until the broker acks (or the publish
 // timeout fires); a returned error means the message did NOT reach the stream
 // and the caller should consider the operation failed.
 //
-// The routing subject is derived from env.SessionId (the single source of
-// truth) so the on-wire body and the channel can never disagree. MessageId
-// is forwarded as the Nats-Msg-Id header so JetStream can deduplicate retried
-// publishes server-side within the stream's dupe-window.
+// The routing subject is derived from env.DeviceId so the on-wire body and
+// the channel can never disagree. MessageId is forwarded as the Nats-Msg-Id
+// header so JetStream can deduplicate retried publishes server-side within
+// the stream's dupe-window.
 func (p *Publisher) PublishCommand(ctx context.Context, env *pb.CommandEnvelope) error {
 	if err := validateCommandEnvelope(env); err != nil {
 		return err
@@ -79,11 +83,11 @@ func (p *Publisher) PublishCommand(ctx context.Context, env *pb.CommandEnvelope)
 	if err != nil {
 		return fmt.Errorf("marshal command envelope: %w", err)
 	}
-	subject := fmt.Sprintf(commandSubjectFmt, env.SessionId)
+	subject := fmt.Sprintf(commandSubjectFmt, env.DeviceId)
 	return p.publish(ctx, subject, payload, env.MessageId)
 }
 
-// PublishOTA marshals env and publishes it to session.{session_id}.ota.
+// PublishOTA marshals env and publishes it to device.{device_id}.ota.
 func (p *Publisher) PublishOTA(ctx context.Context, env *pb.OtaEnvelope) error {
 	if err := validateOtaEnvelope(env); err != nil {
 		return err
@@ -92,7 +96,7 @@ func (p *Publisher) PublishOTA(ctx context.Context, env *pb.OtaEnvelope) error {
 	if err != nil {
 		return fmt.Errorf("marshal ota envelope: %w", err)
 	}
-	subject := fmt.Sprintf(otaSubjectFmt, env.SessionId)
+	subject := fmt.Sprintf(otaSubjectFmt, env.DeviceId)
 	return p.publish(ctx, subject, payload, env.MessageId)
 }
 

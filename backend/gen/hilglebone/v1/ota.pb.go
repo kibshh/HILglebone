@@ -21,13 +21,13 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Sent on subject: session.{session_id}.ota
+// Sent on subject: device.{device_id}.ota
 // Triggers the BBB to download firmware from `firmware_url` and flash the DUT.
 type OtaEnvelope struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	MessageId      string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"` // UUID
 	SessionId      string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	DeviceId       string                 `protobuf:"bytes,3,opt,name=device_id,json=deviceId,proto3" json:"device_id,omitempty"`                   // target BBB
+	DeviceId       string                 `protobuf:"bytes,3,opt,name=device_id,json=deviceId,proto3" json:"device_id,omitempty"`                   // target BBB — also the routing key
 	TimestampUs    int64                  `protobuf:"varint,4,opt,name=timestamp_us,json=timestampUs,proto3" json:"timestamp_us,omitempty"`         // unix microseconds (UTC)
 	FirmwareUrl    string                 `protobuf:"bytes,5,opt,name=firmware_url,json=firmwareUrl,proto3" json:"firmware_url,omitempty"`          // short-lived signed URL (MinIO / S3)
 	FirmwareSha256 string                 `protobuf:"bytes,6,opt,name=firmware_sha256,json=firmwareSha256,proto3" json:"firmware_sha256,omitempty"` // hex-encoded; BBB verifies before flashing

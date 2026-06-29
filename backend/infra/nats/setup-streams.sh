@@ -23,15 +23,19 @@ upsert_stream() {
 }
 
 # ── COMMANDS stream ────────────────────────────────────────────────────────────
-# Subjects: session.*.command  (cloud → BBB sensor commands)
-#           session.*.ota      (cloud → BBB firmware delivery)
+# Subjects: device.*.command  (cloud → BBB sensor / lifecycle commands)
+#           device.*.ota      (cloud → BBB firmware delivery)
+#
+# Routing is keyed by device_id, not session_id: each BBB has its own subject,
+# so the workqueue stream's "delivered to exactly one consumer" semantics map
+# cleanly onto "delivered to exactly one BBB."
 #
 # Workqueue retention: each message is delivered to exactly one consumer and
 # deleted on ACK.  No point storing commands after they've been executed.
 # 1-hour max-age evicts any command that was never consumed (e.g. BBB offline).
 
 upsert_stream COMMANDS \
-    --subjects "session.*.command,session.*.ota" \
+    --subjects "device.*.command,device.*.ota" \
     --retention work \
     --storage file \
     --replicas 1 \

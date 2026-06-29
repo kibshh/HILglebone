@@ -66,11 +66,13 @@ message RuntimeCommand {
 
 // ── Envelope ───────────────────────────────────────────────────────────────────
 
-// Sent on subject: session.{session_id}.command
+// Sent on subject: device.{device_id}.command
+// (session_id is kept in the body so the BBB can validate it matches the
+// session it currently believes itself to be in; routing is by device.)
 message CommandEnvelope {
   string message_id   = 1;  // UUID, for deduplication
   string session_id   = 2;
-  string device_id    = 3;  // target BBB device
+  string device_id    = 3;  // target BBB device — also the routing key
   int64  timestamp_us = 4;  // unix microseconds (UTC)
 
   oneof payload {

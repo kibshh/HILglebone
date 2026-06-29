@@ -472,12 +472,14 @@ func (*RuntimeCommand_Scenario) isRuntimeCommand_Payload() {}
 
 func (*RuntimeCommand_Sync) isRuntimeCommand_Payload() {}
 
-// Sent on subject: session.{session_id}.command
+// Sent on subject: device.{device_id}.command
+// (session_id is kept in the body so the BBB can validate it matches the
+// session it currently believes itself to be in; routing is by device.)
 type CommandEnvelope struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	MessageId   string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"` // UUID, for deduplication
 	SessionId   string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	DeviceId    string                 `protobuf:"bytes,3,opt,name=device_id,json=deviceId,proto3" json:"device_id,omitempty"`           // target BBB device
+	DeviceId    string                 `protobuf:"bytes,3,opt,name=device_id,json=deviceId,proto3" json:"device_id,omitempty"`           // target BBB device — also the routing key
 	TimestampUs int64                  `protobuf:"varint,4,opt,name=timestamp_us,json=timestampUs,proto3" json:"timestamp_us,omitempty"` // unix microseconds (UTC)
 	// Types that are valid to be assigned to Payload:
 	//

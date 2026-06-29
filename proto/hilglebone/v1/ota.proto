@@ -5,12 +5,12 @@ package hilglebone.v1;
 // Go output path. Keep in sync with the backend module.
 option go_package = "github.com/kibshh/HILglebone/backend/gen/hilglebone/v1";
 
-// Sent on subject: session.{session_id}.ota
+// Sent on subject: device.{device_id}.ota
 // Triggers the BBB to download firmware from `firmware_url` and flash the DUT.
 message OtaEnvelope {
   string message_id      = 1;  // UUID
   string session_id      = 2;
-  string device_id       = 3;  // target BBB
+  string device_id       = 3;  // target BBB — also the routing key
   int64  timestamp_us    = 4;  // unix microseconds (UTC)
   string firmware_url    = 5;  // short-lived signed URL (MinIO / S3)
   string firmware_sha256 = 6;  // hex-encoded; BBB verifies before flashing

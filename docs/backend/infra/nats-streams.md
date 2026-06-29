@@ -8,13 +8,19 @@ cloud backend and the BeagleBone agents.
 ## Subject hierarchy
 
 ```
-session.{session_id}.command   cloud → BBB   sensor configuration and control
-session.{session_id}.ota       cloud → BBB   firmware delivery trigger
+device.{device_id}.command     cloud → BBB   sensor / lifecycle commands
+device.{device_id}.ota         cloud → BBB   firmware delivery trigger
 device.{device_id}.telemetry   BBB → cloud   ACKs, error responses, sensor readings
 device.{device_id}.status      BBB → cloud   heartbeat: online state, current session
 ```
 
-`session_id` and `device_id` are opaque UUIDs assigned by the backend.
+All subjects are keyed by `device_id`. Session is carried in the envelope
+body (so the BBB can validate against its current session) but is not used
+for routing — keeping the routing key device-scoped means each BBB has its
+own subject and the workqueue stream's "delivered to exactly one consumer"
+semantics map cleanly onto "delivered to exactly one BBB."
+
+`device_id` is an opaque UUID assigned by the backend at provisioning.
 
 ---
 
@@ -24,22 +30,22 @@ device.{device_id}.status      BBB → cloud   heartbeat: online state, current 
 
 | Property              | Value                                   |
 |-----------------------|-----------------------------------------|
-| Subjects              | `session.*.command`, `session.*.ota`    |
+| Subjects              | `device.*.command`, `device.*.ota`      |
 | Retention             | workqueue                               |
 | Storage               | file                                    |
 | Max age               | 1 hour                                  |
 | Dedup window          | 2 minutes                               |
 
 **Workqueue retention** means a message is deleted from the stream as soon as
-one consumer ACKs it.  This is the right model for commands: there is exactly
-one BBB per session, and once the BBB has processed the command there is no
-reason to keep it.
+one consumer ACKs it.  This is the right model for commands: each device's
+subject is consumed by exactly one BBB, and once that BBB has processed the
+command there is no reason to keep it.
 
 The 1-hour max-age evicts any command the BBB never consumed (e.g. the device
 went offline before delivery).  The backend treats an undelivered command as
 failed and returns an error to the frontend.
 
-Both `session.*.command` and `session.*.ota` live in the same stream so a
+Both `device.*.command` and `device.*.ota` live in the same stream so a
 single durable consumer on the BBB side can pull both without managing two
 subscriptions.
 
@@ -80,9 +86,10 @@ than relying on the message expiring.
 
 ## Consumer pattern
 
-The BBB agent uses a **durable pull consumer** on COMMANDS, bound to its own
-`session_id`.  Pull consumers let the agent control the receive rate and handle
-backpressure naturally during heavy workloads.
+The BBB agent uses a **durable consumer** on COMMANDS, bound to its own
+`device.{device_id}.command` subject (and the matching `.ota`). This pairs
+naturally with workqueue retention: each device's subject has exactly one
+consumer, so the broker never has to choose between candidates.
 
 The backend uses an **ephemeral push consumer** on TELEMETRY and STATUS,
 delivering messages to an in-process subscription.  Push consumers are
