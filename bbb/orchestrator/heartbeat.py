@@ -2,16 +2,18 @@
 
 Publishes a StatusEnvelope to the cloud at a fixed interval so the backend's
 natssub subscriber can keep the bbb_devices row reconciled (`status`,
-`last_seen_at`, `current_session_id`, `stm32_state`). The caller updates the
-self-reported state via setters; the next heartbeat picks up the new value.
+`last_seen_at`, `current_session_id`, `stm32_state`). The heartbeat does NOT
+own its state — it reads from a shared :class:`DeviceState`. Whoever needs to
+change the BBB's self-reported state writes there; the next heartbeat tick
+picks it up.
 
 Lifecycle:
 
-    hb = Heartbeat(nats, device_id, interval_s=30)
-    hb.start()                 # schedule the periodic task
-    hb.set_stm32_state(SYNCED) # values picked up on next tick
-    hb.set_session(session_id) # ...
-    await hb.stop()            # cancel + best-effort final OFFLINE publish
+    state = DeviceState()
+    hb = Heartbeat(nats, device_id, state, interval_s=30)
+    hb.start()
+    state.session_id = "..."     # next tick will publish this
+    await hb.stop()              # cancel + best-effort final OFFLINE
 """
 from __future__ import annotations
 
@@ -20,7 +22,8 @@ import logging
 import time
 
 from comms import NatsClient
-from hilglebone.v1 import common_pb2, status_pb2
+from hilglebone.v1 import status_pb2
+from orchestrator.state import DeviceState
 
 log = logging.getLogger(__name__)
 
@@ -41,36 +44,20 @@ class Heartbeat:
     def __init__(
         self,
         nats: NatsClient,
-        device_id: str,
+        state: DeviceState,
         *,
         interval_s: float = DEFAULT_INTERVAL_S,
     ) -> None:
-        if not device_id:
-            raise ValueError("device_id is empty")
+        if not state.device_id:
+            raise ValueError("state.device_id is empty")
         if interval_s <= 0:
             raise ValueError("interval_s must be > 0")
         self._nats = nats
-        self._device_id = device_id
+        self._state = state
         self._interval_s = interval_s
 
-        # Self-reported state. Defaults: online, no session, STM32 unknown.
-        self._session_id: str = ""
-        self._online_status = status_pb2.OnlineStatus.ONLINE_STATUS_ONLINE
-        self._stm32_state = common_pb2.Stm32State.STM32_STATE_UNSPECIFIED
-
         self._task: asyncio.Task | None = None
-        self._subject = f"device.{device_id}.status"
-
-    # ── state setters (called from the orchestrator main loop) ─────
-
-    def set_session(self, session_id: str) -> None:
-        self._session_id = session_id
-
-    def set_online_status(self, value: status_pb2.OnlineStatus.ValueType) -> None:
-        self._online_status = value
-
-    def set_stm32_state(self, value: common_pb2.Stm32State.ValueType) -> None:
-        self._stm32_state = value
+        self._subject = f"device.{state.device_id}.status"
 
     # ── lifecycle ──────────────────────────────────────────────────
 
@@ -78,7 +65,7 @@ class Heartbeat:
         """Schedule the periodic task. No-op if already started."""
         if self._task is not None:
             return
-        self._task = asyncio.create_task(self._run(), name=f"heartbeat-{self._device_id}")
+        self._task = asyncio.create_task(self._run(), name=f"heartbeat-{self._state.device_id}")
         log.info("heartbeat started", extra={"interval_s": self._interval_s})
 
     async def stop(self) -> None:
@@ -93,7 +80,7 @@ class Heartbeat:
         self._task = None
         try:
             await self._publish_once(
-                online_status=status_pb2.OnlineStatus.ONLINE_STATUS_OFFLINE,
+                override_online_status=status_pb2.OnlineStatus.ONLINE_STATUS_OFFLINE,
             )
             log.info("heartbeat stopped, OFFLINE status published")
         except Exception:
@@ -116,13 +103,17 @@ class Heartbeat:
     async def _publish_once(
         self,
         *,
-        online_status: status_pb2.OnlineStatus.ValueType | None = None,
+        override_online_status: int | None = None,
     ) -> None:
         env = status_pb2.StatusEnvelope(
-            device_id=self._device_id,
-            session_id=self._session_id,
+            device_id=self._state.device_id,
+            session_id=self._state.session_id,
             timestamp_us=int(time.time() * 1_000_000),
-            online_status=online_status if online_status is not None else self._online_status,
-            stm32_state=self._stm32_state,
+            online_status=(
+                override_online_status
+                if override_online_status is not None
+                else self._state.online_status
+            ),
+            stm32_state=self._state.stm32_state,
         )
         await self._nats.publish(self._subject, env.SerializeToString())

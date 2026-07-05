@@ -26,7 +26,8 @@ from nats.js.api import DeliverPolicy
 
 from comms import NatsClient, StmLink
 from hilglebone.v1 import command_pb2, common_pb2, status_pb2
-from orchestrator.heartbeat import Heartbeat
+from orchestrator.response_bridge import ResponseBridge
+from orchestrator.state import DeviceState
 from protocol import FrameType
 
 log = logging.getLogger(__name__)
@@ -49,16 +50,15 @@ class CommandBridge:
         self,
         nats: NatsClient,
         stm: StmLink,
-        heartbeat: Heartbeat,
-        device_id: str,
+        state: DeviceState,
+        response_bridge: ResponseBridge | None = None,
     ) -> None:
-        if not device_id:
-            raise ValueError("device_id is empty")
+        if not state.device_id:
+            raise ValueError("state.device_id is empty")
         self._nats = nats
         self._stm = stm
-        self._heartbeat = heartbeat
-        self._device_id = device_id
-        self._current_session_id: str = ""
+        self._state = state
+        self._response_bridge = response_bridge
 
     async def open(self) -> None:
         """Attach the NATS subscription.
@@ -68,11 +68,11 @@ class CommandBridge:
         policy on those streams (DeliverPolicy.NEW would silently skip
         already-queued work since each message has exactly one consumer).
         """
-        subject = COMMAND_SUBJECT_FMT.format(device_id=self._device_id)
+        subject = COMMAND_SUBJECT_FMT.format(device_id=self._state.device_id)
         # Durable name is per-(device, purpose) so future subscriptions on
         # this device (e.g. the OTA channel) get their own consumer state
         # instead of colliding on `bbb-{device_id}`.
-        durable = f"bbb-{self._device_id}-cmd"
+        durable = f"bbb-{self._state.device_id}-cmd"
         await self._nats.subscribe(
             subject,
             self._on_message,
@@ -81,7 +81,7 @@ class CommandBridge:
         )
         log.info(
             "command bridge open",
-            extra={"subject": subject, "device_id": self._device_id},
+            extra={"subject": subject, "device_id": self._state.device_id},
         )
 
     # ── NATS handler ───────────────────────────────────────────────
@@ -96,10 +96,10 @@ class CommandBridge:
 
         # device_id routing is enforced by the subject; this guard is a
         # cheap sanity check against misrouted publishes by the cloud.
-        if env.device_id != self._device_id:
+        if env.device_id != self._state.device_id:
             log.warning(
                 "command on our subject but wrong device_id; dropping",
-                extra={"env_device": env.device_id, "self": self._device_id},
+                extra={"env_device": env.device_id, "self": self._state.device_id},
             )
             await msg.ack()
             return
@@ -131,14 +131,14 @@ class CommandBridge:
 
     def _session_check_passes(self, which: str | None, env_session_id: str) -> bool:
         """Returns True iff this command is appropriate for the current state."""
-        in_session = self._current_session_id != ""
+        in_session = self._state.session_id != ""
 
         if which == "session_start":
             if in_session:
                 log.warning(
                     "session_start while already in a session; dropping",
                     extra={
-                        "current": self._current_session_id,
+                        "current": self._state.session_id,
                         "requested": env_session_id,
                     },
                 )
@@ -152,11 +152,11 @@ class CommandBridge:
                     extra={"requested": env_session_id},
                 )
                 return False
-            if env_session_id != self._current_session_id:
+            if env_session_id != self._state.session_id:
                 log.warning(
                     "session_stop for a different session; dropping",
                     extra={
-                        "current": self._current_session_id,
+                        "current": self._state.session_id,
                         "requested": env_session_id,
                     },
                 )
@@ -170,11 +170,11 @@ class CommandBridge:
                     extra={"requested": env_session_id},
                 )
                 return False
-            if env_session_id != self._current_session_id:
+            if env_session_id != self._state.session_id:
                 log.warning(
                     "runtime command for a different session; dropping",
                     extra={
-                        "current": self._current_session_id,
+                        "current": self._state.session_id,
                         "requested": env_session_id,
                     },
                 )
@@ -187,16 +187,14 @@ class CommandBridge:
     # ── Lifecycle handlers (cloud-only, never reach STM32) ─────────
 
     async def _handle_session_start(self, env: command_pb2.CommandEnvelope) -> None:
-        self._current_session_id = env.session_id
-        self._heartbeat.set_session(env.session_id)
-        self._heartbeat.set_online_status(status_pb2.OnlineStatus.ONLINE_STATUS_BUSY)
+        self._state.session_id = env.session_id
+        self._state.online_status = status_pb2.OnlineStatus.ONLINE_STATUS_BUSY
         log.info("session started", extra={"session_id": env.session_id})
 
     async def _handle_session_stop(self, env: command_pb2.CommandEnvelope) -> None:
         log.info("session stopped", extra={"session_id": env.session_id})
-        self._current_session_id = ""
-        self._heartbeat.set_session("")
-        self._heartbeat.set_online_status(status_pb2.OnlineStatus.ONLINE_STATUS_ONLINE)
+        self._state.session_id = ""
+        self._state.online_status = status_pb2.OnlineStatus.ONLINE_STATUS_ONLINE
 
     # ── Runtime handlers (forwarded over UART) ─────────────────────
 
@@ -252,14 +250,36 @@ class CommandBridge:
 
     async def _send_command(self, frame_type: int, payload: bytes) -> None:
         try:
-            ack = await self._stm.send_command(frame_type, payload)
-            log.info(
-                "stm32 ack",
-                extra={
-                    "frame_type": frame_type,
-                    "error_code": ack.error_code,
-                    "sensor_id": ack.sensor_id,
-                },
-            )
+            ack, seq = await self._stm.send_command(frame_type, payload)
         except Exception:
+            # TimeoutError (no ACK in window) or CommandError (cmd_type
+            # mismatch — protocol bug) lands here. In both cases there's no
+            # AckResponse to forward; the cloud will notice via the command
+            # never producing a telemetry-ACK plus the BBB's logs.
             log.exception("stm32 command failed", extra={"frame_type": frame_type})
+            return
+
+        # Every ACK gets logged and forwarded — including the error_code != 0
+        # case. The cloud's TelemetryEnvelope.AckResponse carries error_code
+        # specifically so the backend / dashboard see "STM32 rejected this".
+        log.log(
+            logging.WARNING if not ack.ok else logging.INFO,
+            "stm32 ack",
+            extra={
+                "frame_type": frame_type,
+                "seq": seq,
+                "error_code": ack.error_code,
+                "sensor_id": ack.sensor_id,
+            },
+        )
+
+        if self._response_bridge is not None:
+            try:
+                await self._response_bridge.publish_ack(
+                    seq=seq,
+                    cmd_type=ack.cmd_type,
+                    error_code=ack.error_code,
+                    sensor_id=ack.sensor_id,
+                )
+            except Exception:
+                log.exception("ack forwarding failed", extra={"frame_type": frame_type})
