@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1dhilglebone/v1/telemetry.proto\x12\rhilglebone.v1\"\\\n\x0b\x41\x63kResponse\x12\x14\n\x0csequence_num\x18\x01 \x01(\r\x12\x10\n\x08\x63md_type\x18\x02 \x01(\r\x12\x12\n\nerror_code\x18\x03 \x01(\r\x12\x11\n\tsensor_id\x18\x04 \x01(\r\"F\n\rErrorResponse\x12\x11\n\tsensor_id\x18\x01 \x01(\r\x12\x12\n\nerror_code\x18\x02 \x01(\r\x12\x0e\n\x06\x64\x65tail\x18\x03 \x01(\t\"Z\n\x0cStatusReport\x12\x10\n\x08uptime_s\x18\x01 \x01(\r\x12\x1b\n\x13\x61\x63tive_sensor_count\x18\x02 \x01(\r\x12\x1b\n\x13\x63ommand_queue_depth\x18\x03 \x01(\r\"\xeb\x01\n\x11TelemetryEnvelope\x12\x11\n\tdevice_id\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\x12\x14\n\x0ctimestamp_us\x18\x03 \x01(\x03\x12)\n\x03\x61\x63k\x18\n \x01(\x0b\x32\x1a.hilglebone.v1.AckResponseH\x00\x12-\n\x05\x65rror\x18\x0b \x01(\x0b\x32\x1c.hilglebone.v1.ErrorResponseH\x00\x12\x34\n\rstatus_report\x18\x0c \x01(\x0b\x32\x1b.hilglebone.v1.StatusReportH\x00\x42\t\n\x07payloadB8Z6github.com/kibshh/HILglebone/backend/gen/hilglebone/v1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1dhilglebone/v1/telemetry.proto\x12\rhilglebone.v1\"\\\n\x0b\x41\x63kResponse\x12\x14\n\x0csequence_num\x18\x01 \x01(\r\x12\x10\n\x08\x63md_type\x18\x02 \x01(\r\x12\x12\n\nerror_code\x18\x03 \x01(\r\x12\x11\n\tsensor_id\x18\x04 \x01(\r\"6\n\rErrorResponse\x12\x11\n\tsensor_id\x18\x01 \x01(\r\x12\x12\n\nerror_code\x18\x02 \x01(\r\"Z\n\x0cStatusReport\x12\x10\n\x08uptime_s\x18\x01 \x01(\r\x12\x1b\n\x13\x61\x63tive_sensor_count\x18\x02 \x01(\r\x12\x1b\n\x13\x63ommand_queue_depth\x18\x03 \x01(\r\"\xeb\x01\n\x11TelemetryEnvelope\x12\x11\n\tdevice_id\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\x12\x14\n\x0ctimestamp_us\x18\x03 \x01(\x03\x12)\n\x03\x61\x63k\x18\n \x01(\x0b\x32\x1a.hilglebone.v1.AckResponseH\x00\x12-\n\x05\x65rror\x18\x0b \x01(\x0b\x32\x1c.hilglebone.v1.ErrorResponseH\x00\x12\x34\n\rstatus_report\x18\x0c \x01(\x0b\x32\x1b.hilglebone.v1.StatusReportH\x00\x42\t\n\x07payloadB8Z6github.com/kibshh/HILglebone/backend/gen/hilglebone/v1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -35,9 +35,9 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_ACKRESPONSE']._serialized_start=48
   _globals['_ACKRESPONSE']._serialized_end=140
   _globals['_ERRORRESPONSE']._serialized_start=142
-  _globals['_ERRORRESPONSE']._serialized_end=212
-  _globals['_STATUSREPORT']._serialized_start=214
-  _globals['_STATUSREPORT']._serialized_end=304
-  _globals['_TELEMETRYENVELOPE']._serialized_start=307
-  _globals['_TELEMETRYENVELOPE']._serialized_end=542
+  _globals['_ERRORRESPONSE']._serialized_end=196
+  _globals['_STATUSREPORT']._serialized_start=198
+  _globals['_STATUSREPORT']._serialized_end=288
+  _globals['_TELEMETRYENVELOPE']._serialized_start=291
+  _globals['_TELEMETRYENVELOPE']._serialized_end=526
 # @@protoc_insertion_point(module_scope)

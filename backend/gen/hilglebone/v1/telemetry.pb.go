@@ -101,7 +101,6 @@ type ErrorResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SensorId      uint32                 `protobuf:"varint,1,opt,name=sensor_id,json=sensorId,proto3" json:"sensor_id,omitempty"` // 0x00 if the error is not sensor-scoped
 	ErrorCode     uint32                 `protobuf:"varint,2,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
-	Detail        string                 `protobuf:"bytes,3,opt,name=detail,proto3" json:"detail,omitempty"` // human-readable; empty when not available
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -148,13 +147,6 @@ func (x *ErrorResponse) GetErrorCode() uint32 {
 		return x.ErrorCode
 	}
 	return 0
-}
-
-func (x *ErrorResponse) GetDetail() string {
-	if x != nil {
-		return x.Detail
-	}
-	return ""
 }
 
 // Maps to STATUS_REPORT. Unsolicited, emitted by the STM32 every 5 seconds.
@@ -352,12 +344,11 @@ const file_hilglebone_v1_telemetry_proto_rawDesc = "" +
 	"\bcmd_type\x18\x02 \x01(\rR\acmdType\x12\x1d\n" +
 	"\n" +
 	"error_code\x18\x03 \x01(\rR\terrorCode\x12\x1b\n" +
-	"\tsensor_id\x18\x04 \x01(\rR\bsensorId\"c\n" +
+	"\tsensor_id\x18\x04 \x01(\rR\bsensorId\"K\n" +
 	"\rErrorResponse\x12\x1b\n" +
 	"\tsensor_id\x18\x01 \x01(\rR\bsensorId\x12\x1d\n" +
 	"\n" +
-	"error_code\x18\x02 \x01(\rR\terrorCode\x12\x16\n" +
-	"\x06detail\x18\x03 \x01(\tR\x06detail\"\x89\x01\n" +
+	"error_code\x18\x02 \x01(\rR\terrorCode\"\x89\x01\n" +
 	"\fStatusReport\x12\x19\n" +
 	"\buptime_s\x18\x01 \x01(\rR\auptimeS\x12.\n" +
 	"\x13active_sensor_count\x18\x02 \x01(\rR\x11activeSensorCount\x12.\n" +

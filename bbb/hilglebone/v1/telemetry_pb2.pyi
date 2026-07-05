@@ -17,14 +17,12 @@ class AckResponse(_message.Message):
     def __init__(self, sequence_num: _Optional[int] = ..., cmd_type: _Optional[int] = ..., error_code: _Optional[int] = ..., sensor_id: _Optional[int] = ...) -> None: ...
 
 class ErrorResponse(_message.Message):
-    __slots__ = ("sensor_id", "error_code", "detail")
+    __slots__ = ("sensor_id", "error_code")
     SENSOR_ID_FIELD_NUMBER: _ClassVar[int]
     ERROR_CODE_FIELD_NUMBER: _ClassVar[int]
-    DETAIL_FIELD_NUMBER: _ClassVar[int]
     sensor_id: int
     error_code: int
-    detail: str
-    def __init__(self, sensor_id: _Optional[int] = ..., error_code: _Optional[int] = ..., detail: _Optional[str] = ...) -> None: ...
+    def __init__(self, sensor_id: _Optional[int] = ..., error_code: _Optional[int] = ...) -> None: ...
 
 class StatusReport(_message.Message):
     __slots__ = ("uptime_s", "active_sensor_count", "command_queue_depth")

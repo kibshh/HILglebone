@@ -224,8 +224,7 @@ func (s *Subscriber) handleTelemetry(msg *nats.Msg) {
 		eventType = "telemetry_error"
 		slog.Warn("telemetry error",
 			"device_id", env.DeviceId, "session_id", env.SessionId,
-			"sensor_id", p.Error.SensorId, "error_code", p.Error.ErrorCode,
-			"detail", p.Error.Detail)
+			"sensor_id", p.Error.SensorId, "error_code", p.Error.ErrorCode)
 	case *pb.TelemetryEnvelope_StatusReport:
 		eventType = "telemetry_status_report"
 		slog.Info("telemetry status_report",

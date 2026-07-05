@@ -25,7 +25,6 @@ message AckResponse {
 message ErrorResponse {
   uint32 sensor_id  = 1;  // 0x00 if the error is not sensor-scoped
   uint32 error_code = 2;
-  string detail     = 3;  // human-readable; empty when not available
 }
 
 // Maps to STATUS_REPORT. Unsolicited, emitted by the STM32 every 5 seconds.
