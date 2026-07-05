@@ -244,7 +244,9 @@ class StmLink:
     ) -> None:
         """Establish communication with the STM32 via CMD_SYNC handshake.
 
-        Retries on timeout, propagates any other CommandError as SyncError.
+        Retries on timeout. Treats a non-zero ack.error_code or any
+        CommandError (cmd_type mismatch) as a fatal SyncError — for the
+        boot handshake we want to refuse to proceed if anything's off.
 
         Args:
             retries:   Maximum number of CMD_SYNC attempts.
@@ -256,12 +258,17 @@ class StmLink:
         """
         for attempt in range(1, retries + 1):
             try:
-                await self.send_command(FrameType.CMD_SYNC, timeout_s=timeout_s)
-                return
+                ack, _ = await self.send_command(FrameType.CMD_SYNC, timeout_s=timeout_s)
             except TimeoutError:
                 continue  # retry
             except CommandError as exc:
                 raise SyncError(f"CMD_SYNC attempt {attempt}: {exc}") from exc
+            if not ack.ok:
+                raise SyncError(
+                    f"CMD_SYNC attempt {attempt}: "
+                    f"RSP_ACK error_code=0x{ack.error_code:02X}"
+                )
+            return
 
         raise SyncError(
             f"CMD_SYNC failed: no valid RSP_ACK after {retries} "
@@ -275,7 +282,7 @@ class StmLink:
         frame_type: int,
         payload: bytes = b"",
         timeout_s: float = CMD_TIMEOUT_S,
-    ) -> AckResponse:
+    ) -> tuple[AckResponse, int]:
         """Send a command and wait for its matching RSP_ACK.
 
         Allocates a fresh seq, registers a future in the pending-ACKs map,
@@ -288,12 +295,21 @@ class StmLink:
             timeout_s:  Deadline in seconds (default :data:`CMD_TIMEOUT_S`).
 
         Returns:
-            :class:`~protocol.AckResponse` for the sent frame.
+            ``(ack, seq)`` — the decoded :class:`~protocol.AckResponse` and
+            the wire sequence number we allocated for the command. The seq
+            is surfaced so the caller can forward it on (e.g. as the
+            ``sequence_num`` field of an ``AckResponse`` telemetry envelope).
+
+            A non-zero ``ack.error_code`` is a *normal* failure (STM32 got
+            the command but couldn't execute it); the caller decides what
+            to do — typically log and forward as-is to the cloud so the
+            error_code is observable.
 
         Raises:
             TimeoutError:               if no matching ACK arrives in time.
-            CommandError:               if the ACK carries a non-zero error_code
-                                        or its cmd_type doesn't match.
+            CommandError:               if the ACK's cmd_type doesn't match
+                                        the frame_type we sent (protocol bug,
+                                        not a normal command failure).
             serial.SerialException:     if the port fails mid-command.
             ValueError:                 if ``frame_type`` or ``payload`` are invalid.
         """
@@ -313,16 +329,14 @@ class StmLink:
                     f"no RSP_ACK within {timeout_s}s"
                 ) from None
             ack = parse_ack(ack_frame)
-            if not ack.ok:
-                raise CommandError(
-                    f"frame_type=0x{ack.cmd_type:02X} seq={seq}: "
-                    f"RSP_ACK error_code=0x{ack.error_code:02X}"
-                )
+            # cmd_type mismatch is a protocol-level bug (STM32 acked the
+            # wrong command); raise so it's loud. A non-zero error_code is
+            # NOT raised — that's a normal failure the caller forwards.
             if ack.cmd_type != frame_type:
                 raise CommandError(
                     f"expected cmd_type=0x{frame_type:02X} seq={seq}: "
                     f"ACK cmd_type mismatch 0x{ack.cmd_type:02X}"
                 )
-            return ack
+            return ack, seq
         finally:
             self._pending_acks.pop(seq, None)

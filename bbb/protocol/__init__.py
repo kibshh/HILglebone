@@ -77,6 +77,7 @@ from .encoder import (
     encode_frame,
     parse_ack,
     parse_error_response,
+    parse_status_report,
 )
 from .dac import (
     DacConfig,
@@ -97,7 +98,7 @@ from .pwm import (
     PWM_FREQ_MAX_HZ,
     PWM_FREQ_MIN_HZ,
 )
-from .frame import AckResponse, ErrorResponse, Frame, ParseError, ParseErrorReason
+from .frame import AckResponse, ErrorResponse, Frame, ParseError, ParseErrorReason, StatusReport
 from .i2c import I2cSensorConfig, pack_i2c_cfg, pack_i2c_set_output
 from .parser import ProtocolParser
 
@@ -108,6 +109,7 @@ __all__ = [
     "Frame",
     "AckResponse",
     "ErrorResponse",
+    "StatusReport",
     "ParseError",
     "ParseErrorReason",
     # Encoder
@@ -120,6 +122,7 @@ __all__ = [
     # Response decoders
     "parse_ack",
     "parse_error_response",
+    "parse_status_report",
     # I2C backend
     "I2cSensorConfig",
     "pack_i2c_cfg",

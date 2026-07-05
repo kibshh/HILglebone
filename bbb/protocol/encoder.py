@@ -10,6 +10,8 @@ as a convenience but is deliberately not hidden inside these functions.
 """
 from __future__ import annotations
 
+import struct
+
 from .constants import (
     FRAME_OVERHEAD,
     MAX_PAYLOAD_SIZE,
@@ -18,11 +20,13 @@ from .constants import (
     ProtocolId,
 )
 from .crc import CRC16_INIT, crc16_ccitt
-from .frame import AckResponse, ErrorResponse, Frame
+from .frame import AckResponse, ErrorResponse, Frame, StatusReport
 
 # RSP_ACK and RSP_ERROR payload sizes (from protocol.h).
-_RSP_ACK_SIZE: int   = 3
-_RSP_ERROR_SIZE: int = 2
+_RSP_ACK_SIZE: int          = 3
+_RSP_ERROR_SIZE: int        = 2
+_STATUS_REPORT_SIZE: int    = 6   # u32 uptime + u8 active + u8 queue (LE)
+_STATUS_REPORT_FMT: str     = "<IBB"
 
 
 # ── Low-level frame builder ────────────────────────────────────────
@@ -186,6 +190,29 @@ def parse_error_response(frame: Frame) -> ErrorResponse:
     return ErrorResponse(
         sensor_id=frame.payload[0],
         error_code=frame.payload[1],
+    )
+
+
+def parse_status_report(frame: Frame) -> StatusReport:
+    """Decode a STATUS_REPORT frame payload into a StatusReport.
+
+    Raises:
+        ValueError: if the frame type is not STATUS_REPORT, or payload length is wrong.
+    """
+    if frame.type != FrameType.STATUS_REPORT:
+        raise ValueError(
+            f"expected STATUS_REPORT (0x{FrameType.STATUS_REPORT:02X}), got 0x{frame.type:02X}"
+        )
+    if len(frame.payload) != _STATUS_REPORT_SIZE:
+        raise ValueError(
+            f"STATUS_REPORT payload must be {_STATUS_REPORT_SIZE} bytes, "
+            f"got {len(frame.payload)}"
+        )
+    uptime_s, active, queue = struct.unpack(_STATUS_REPORT_FMT, frame.payload)
+    return StatusReport(
+        uptime_s=uptime_s,
+        active_sensor_count=active,
+        command_queue_depth=queue,
     )
 
 

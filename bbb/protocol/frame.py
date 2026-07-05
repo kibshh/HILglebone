@@ -57,6 +57,28 @@ class ErrorResponse:
     error_code: int
 
 
+@dataclass(frozen=True, slots=True)
+class StatusReport:
+    """Decoded STATUS_REPORT payload (6 bytes fixed).
+
+    Wire layout (little-endian):
+        offset 0  size 4  uptime_s             (u32)
+        offset 4  size 1  active_sensor_count  (u8)
+        offset 5  size 1  command_queue_depth  (u8)
+
+    Attributes:
+        uptime_s:            Seconds since STM32 boot.
+        active_sensor_count: Number of sensor slots currently emulating.
+        command_queue_depth: Frames the STM32 has received over UART but has
+                             not yet dispatched to a sensor handler — its
+                             own RX backlog, not anything on the BBB side.
+    """
+
+    uptime_s: int
+    active_sensor_count: int
+    command_queue_depth: int
+
+
 class ParseErrorReason(Enum):
     """Why the parser rejected a frame."""
 
