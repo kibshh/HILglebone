@@ -66,6 +66,15 @@ class OtaBridge:
         self._state = state
         self._firmware_dir = firmware_dir
 
+        # Graceful-shutdown plumbing; see CommandBridge for the pattern.
+        # OTA downloads can be long (multi-MB firmware over a slow LAN),
+        # so drain()'s default timeout is short — an in-flight download
+        # that misses the window will be redelivered on next boot.
+        self._shutting_down: bool = False
+        self._inflight: int = 0
+        self._idle: asyncio.Event = asyncio.Event()
+        self._idle.set()
+
     # ── Lifecycle ──────────────────────────────────────────────────
 
     async def open(self) -> None:
@@ -84,9 +93,47 @@ class OtaBridge:
             extra={"subject": subject, "firmware_dir": str(self._firmware_dir)},
         )
 
+    async def drain(self, timeout_s: float = 5.0) -> None:
+        """Stop accepting new OTA envelopes; wait for in-flight download.
+
+        A firmware download that doesn't finish inside `timeout_s` gets
+        cut off when the caller proceeds to close NATS. The .part file
+        cleanup in `_handle` covers cancellation, so no partial firmware
+        image survives the shutdown. JetStream will redeliver the OTA
+        envelope on next boot.
+        """
+        self._shutting_down = True
+        if self._inflight == 0:
+            return
+        log.info("ota bridge draining", extra={"in_flight": self._inflight})
+        try:
+            await asyncio.wait_for(self._idle.wait(), timeout_s)
+        except asyncio.TimeoutError:
+            log.warning(
+                "ota bridge drain timeout; download will be re-tried on next boot",
+                extra={"still_in_flight": self._inflight, "timeout_s": timeout_s},
+            )
+
     # ── NATS handler ───────────────────────────────────────────────
 
     async def _on_message(self, msg) -> None:  # noqa: ANN001  (NATS Msg)
+        if self._shutting_down:
+            try:
+                await msg.nak()
+            except Exception:
+                log.exception("nak during shutdown failed")
+            return
+
+        self._inflight += 1
+        self._idle.clear()
+        try:
+            await self._process(msg)
+        finally:
+            self._inflight -= 1
+            if self._inflight == 0:
+                self._idle.set()
+
+    async def _process(self, msg) -> None:  # noqa: ANN001  (NATS Msg)
         try:
             env = ota_pb2.OtaEnvelope.FromString(msg.data)
         except Exception:
@@ -143,39 +190,48 @@ class OtaBridge:
         dest = self._firmware_dir / f"{env.message_id}.bin"
         tmp = dest.with_suffix(dest.suffix + _TMP_SUFFIX)
 
+        # `promoted` gates the finally-block cleanup: on any exit path that
+        # isn't a successful atomic rename we delete the .part file. This
+        # includes CancelledError (shutdown cut us off mid-download) as well
+        # as size/sha mismatches and network failures — none of which are
+        # caught by `except Exception`.
+        promoted = False
         try:
-            actual_sha256, actual_size = await self._download(env.firmware_url, tmp)
-        except Exception:
-            log.exception("firmware download failed", extra={"url": env.firmware_url})
-            tmp.unlink(missing_ok=True)
-            return
+            try:
+                actual_sha256, actual_size = await self._download(env.firmware_url, tmp)
+            except Exception:
+                log.exception("firmware download failed", extra={"url": env.firmware_url})
+                return
 
-        if actual_size != env.firmware_size:
-            log.error(
-                "firmware size mismatch; refusing to flash",
-                extra={"expected": env.firmware_size, "actual": actual_size},
+            if actual_size != env.firmware_size:
+                log.error(
+                    "firmware size mismatch; refusing to flash",
+                    extra={"expected": env.firmware_size, "actual": actual_size},
+                )
+                return
+            if actual_sha256 != env.firmware_sha256:
+                log.error(
+                    "firmware sha256 mismatch; refusing to flash",
+                    extra={"expected": env.firmware_sha256, "actual": actual_sha256},
+                )
+                return
+
+            # Atomic promotion: the final path only exists once the bytes
+            # have been fully written AND verified, so a crash between
+            # download and verify never leaves a good-looking image at
+            # the target. Path.replace maps to os.replace — atomic on
+            # POSIX, overwrites dest.
+            tmp.replace(dest)
+            promoted = True
+
+            log.info(
+                "firmware verified",
+                extra={"path": str(dest), "size": actual_size, "sha256": actual_sha256},
             )
-            tmp.unlink(missing_ok=True)
-            return
-        if actual_sha256 != env.firmware_sha256:
-            log.error(
-                "firmware sha256 mismatch; refusing to flash",
-                extra={"expected": env.firmware_sha256, "actual": actual_sha256},
-            )
-            tmp.unlink(missing_ok=True)
-            return
-
-        # Atomic promotion: the final path only exists once the bytes have
-        # been fully written AND verified, so a crash between download and
-        # verify never leaves a good-looking image at the target path.
-        # Path.replace maps to os.replace — atomic on POSIX, overwrites dest.
-        tmp.replace(dest)
-
-        log.info(
-            "firmware verified",
-            extra={"path": str(dest), "size": actual_size, "sha256": actual_sha256},
-        )
-        await self._flash(dest)
+            await self._flash(dest)
+        finally:
+            if not promoted:
+                tmp.unlink(missing_ok=True)
 
     async def _download(self, url: str, tmp: Path) -> tuple[str, int]:
         """Stream url → tmp while computing SHA-256. Single pass, chunked.
