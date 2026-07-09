@@ -44,19 +44,6 @@ func (h *Handler) Allocate(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusCreated, session)
 }
 
-func (h *Handler) Start(w http.ResponseWriter, r *http.Request) {
-	id, ok := parsePathID(w, r)
-	if !ok {
-		return
-	}
-	session, err := h.service.Start(r.Context(), id)
-	if err != nil {
-		writeServiceError(w, err)
-		return
-	}
-	httpx.WriteJSON(w, http.StatusOK, session)
-}
-
 func (h *Handler) Stop(w http.ResponseWriter, r *http.Request) {
 	id, ok := parsePathID(w, r)
 	if !ok {

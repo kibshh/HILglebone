@@ -78,8 +78,8 @@ CREATE TABLE sessions (
     bbb_device_id       UUID        NOT NULL REFERENCES bbb_devices(id)      ON DELETE RESTRICT,
     dut_device_id       UUID        NOT NULL REFERENCES dut_devices(id)      ON DELETE RESTRICT,
     firmware_upload_id  UUID        REFERENCES firmware_uploads(id)          ON DELETE SET NULL,
-    status              TEXT        NOT NULL DEFAULT 'allocated'
-                                    CHECK (status IN ('allocated', 'running', 'stopped', 'error')),
+    status              TEXT        NOT NULL DEFAULT 'running'
+                                    CHECK (status IN ('running', 'stopped', 'error')),
     started_at          TIMESTAMPTZ,
     stopped_at          TIMESTAMPTZ,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -94,4 +94,4 @@ CREATE INDEX sessions_status_idx             ON sessions (status);
 -- A BBB can have at most one non-terminal session at a time.
 CREATE UNIQUE INDEX sessions_one_active_per_bbb_idx
     ON sessions (bbb_device_id)
-    WHERE status IN ('allocated', 'running');
+    WHERE status = 'running';

@@ -47,7 +47,6 @@ func New(
 	mux.HandleFunc("POST /api/v1/sessions", sessionHandler.Allocate)
 	mux.HandleFunc("GET /api/v1/sessions", sessionHandler.List)
 	mux.HandleFunc("GET /api/v1/sessions/{id}", sessionHandler.Get)
-	mux.HandleFunc("POST /api/v1/sessions/{id}/start", sessionHandler.Start)
 	mux.HandleFunc("POST /api/v1/sessions/{id}/stop", sessionHandler.Stop)
 	mux.HandleFunc("POST /api/v1/firmware", firmwareHandler.Upload)
 	mux.HandleFunc("GET /ws/sessions/{id}/telemetry", wsHandler.Telemetry)

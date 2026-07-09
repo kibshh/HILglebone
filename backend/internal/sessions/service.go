@@ -90,95 +90,64 @@ func scanSession(row pgx.Row) (*Session, error) {
 	return &s, nil
 }
 
-// Allocate creates a session in 'allocated' state, binding a user, BBB, DUT,
-// and optional firmware. The INSERT ... SELECT FROM dut_devices verifies in a
-// single query that the DUT is wired to the requested BBB: if not, zero rows
-// match and the insert is a no-op.
+// Allocate creates a session, immediately marks it running, and notifies
+// the target BBB. The INSERT ... SELECT FROM dut_devices verifies in a
+// single query that the DUT is wired to the requested BBB: if not, zero
+// rows match and the insert is a no-op.
+//
+// A BBB is physically committed to a session the moment it's allocated,
+// so there is no meaningful "allocated but not started" state. The row
+// goes straight to `running` and SessionStartCommand fires to tell the
+// BBB it's now BUSY on this session.
 func (s *Service) Allocate(ctx context.Context, req AllocateRequest) (*Session, error) {
 	row := s.pool.QueryRow(ctx,
-		`INSERT INTO sessions (user_id, bbb_device_id, dut_device_id, firmware_upload_id)
-		 SELECT $1::uuid, dd.bbb_device_id, dd.id, $4
+		`INSERT INTO sessions (user_id, bbb_device_id, dut_device_id, firmware_upload_id, status, started_at)
+		 SELECT $1::uuid, dd.bbb_device_id, dd.id, $4, 'running', now()
 		 FROM dut_devices dd
 		 WHERE dd.id = $3 AND dd.bbb_device_id = $2
 		 RETURNING `+sessionFields,
 		req.UserID, req.BBBDeviceID, req.DUTDeviceID, req.FirmwareUploadID,
 	)
 	session, err := scanSession(row)
-	if err == nil {
-		slog.Info("session allocated", "session_id", session.ID,
-			"bbb_device_id", session.BBBDeviceID, "dut_device_id", session.DUTDeviceID)
-		return session, nil
-	}
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrInvalidReference
-	}
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
-		switch pgErr.Code {
-		case pgUniqueViolation:
-			return nil, ErrBBBBusy
-		case pgForeignKeyViolation:
-			return nil, ErrInvalidReference
-		}
-	}
-	slog.Error("session allocate failed", "error", err)
-	return nil, fmt.Errorf("allocate session: %w", err)
-}
-
-func (s *Service) Start(ctx context.Context, id uuid.UUID) (*Session, error) {
-	row := s.pool.QueryRow(ctx,
-		`UPDATE sessions
-		 SET status = 'running', started_at = now(), updated_at = now()
-		 WHERE id = $1 AND status = 'allocated'
-		 RETURNING `+sessionFields,
-		id,
-	)
-	session, err := scanSession(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return s.classifyTransitionFailure(ctx, id)
+			return nil, ErrInvalidReference
 		}
-		slog.Error("session start failed", "error", err, "session_id", id)
-		return nil, fmt.Errorf("start session: %w", err)
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Code {
+			case pgUniqueViolation:
+				return nil, ErrBBBBusy
+			case pgForeignKeyViolation:
+				return nil, ErrInvalidReference
+			}
+		}
+		slog.Error("session allocate failed", "error", err)
+		return nil, fmt.Errorf("allocate session: %w", err)
 	}
+	slog.Info("session allocated", "session_id", session.ID,
+		"bbb_device_id", session.BBBDeviceID, "dut_device_id", session.DUTDeviceID)
 
 	if pubErr := s.publishLifecycle(ctx, session, &pb.CommandEnvelope{
 		Payload: &pb.CommandEnvelope_SessionStart{SessionStart: &pb.SessionStartCommand{}},
 	}); pubErr != nil {
-		s.revertStart(ctx, id, pubErr)
+		s.revertAllocate(ctx, session.ID, pubErr)
 		return nil, fmt.Errorf("publish session start: %w", pubErr)
 	}
 
-	slog.Info("session started", "session_id", id)
 	s.publishToBus(session, "session_start")
 	return session, nil
 }
 
 func (s *Service) Stop(ctx context.Context, id uuid.UUID) (*Session, error) {
-	// We need the previous status so we can revert to it on publish failure.
-	// A single CTE runs the SELECT and the conditional UPDATE in one snapshot,
-	// then RETURNING surfaces both the updated row and the captured old status.
-	var session Session
-	var prevStatus string
-	err := s.pool.QueryRow(ctx,
-		`WITH prev AS (
-		    SELECT status FROM sessions WHERE id = $1
-		), updated AS (
-		    UPDATE sessions
-		    SET status = 'stopped', stopped_at = now(), updated_at = now()
-		    WHERE id = $1 AND status IN ('allocated', 'running')
-		    RETURNING `+sessionFields+`
-		)
-		SELECT u.id, u.user_id, u.bbb_device_id, u.dut_device_id, u.firmware_upload_id,
-		       u.status, u.started_at, u.stopped_at, u.created_at, u.updated_at,
-		       p.status
-		FROM updated u CROSS JOIN prev p`,
+	row := s.pool.QueryRow(ctx,
+		`UPDATE sessions
+		 SET status = 'stopped', stopped_at = now(), updated_at = now()
+		 WHERE id = $1 AND status = 'running'
+		 RETURNING `+sessionFields,
 		id,
-	).Scan(
-		&session.ID, &session.UserID, &session.BBBDeviceID, &session.DUTDeviceID, &session.FirmwareUploadID,
-		&session.Status, &session.StartedAt, &session.StoppedAt, &session.CreatedAt, &session.UpdatedAt,
-		&prevStatus,
 	)
+	session, err := scanSession(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return s.classifyTransitionFailure(ctx, id)
@@ -187,16 +156,16 @@ func (s *Service) Stop(ctx context.Context, id uuid.UUID) (*Session, error) {
 		return nil, fmt.Errorf("stop session: %w", err)
 	}
 
-	if pubErr := s.publishLifecycle(ctx, &session, &pb.CommandEnvelope{
+	if pubErr := s.publishLifecycle(ctx, session, &pb.CommandEnvelope{
 		Payload: &pb.CommandEnvelope_SessionStop{SessionStop: &pb.SessionStopCommand{}},
 	}); pubErr != nil {
-		s.revertStop(ctx, id, prevStatus, pubErr)
+		s.revertStop(ctx, id, pubErr)
 		return nil, fmt.Errorf("publish session stop: %w", pubErr)
 	}
 
 	slog.Info("session stopped", "session_id", id)
-	s.publishToBus(&session, "session_stop")
-	return &session, nil
+	s.publishToBus(session, "session_stop")
+	return session, nil
 }
 
 
@@ -228,34 +197,35 @@ func (s *Service) publishLifecycle(ctx context.Context, session *Session, env *p
 	return s.publisher.PublishCommand(ctx, env)
 }
 
-// revertStart undoes a Start transition when the publish failed. A rollback
-// failure here is logged loudly because it leaves the DB inconsistent with
-// the BBB's view — a human or reconciler will need to fix it.
-func (s *Service) revertStart(ctx context.Context, id uuid.UUID, pubErr error) {
+// revertAllocate undoes an Allocate transition when the BBB notification
+// publish failed. Deletes the row we just inserted so the frontend never
+// sees a session the BBB doesn't know about. Rollback failure is logged
+// loudly — the row would then be orphaned in 'allocated' state and would
+// need a human / reconciler.
+func (s *Service) revertAllocate(ctx context.Context, id uuid.UUID, pubErr error) {
 	_, err := s.pool.Exec(ctx,
-		`UPDATE sessions
-		 SET status = 'allocated', started_at = NULL, updated_at = now()
-		 WHERE id = $1 AND status = 'running'`,
+		`DELETE FROM sessions WHERE id = $1 AND status = 'allocated'`,
 		id,
 	)
 	if err != nil {
-		slog.Error("session start rollback failed",
+		slog.Error("session allocate rollback failed",
 			"error", err, "publish_error", pubErr, "session_id", id)
 	}
 }
 
-// revertStop undoes a Stop transition when the publish failed.
-func (s *Service) revertStop(ctx context.Context, id uuid.UUID, prevStatus string, pubErr error) {
+// revertStop undoes a Stop transition when the publish failed. With the
+// two-state model (running / stopped) the previous status is always
+// 'running', so no CTE-captured prev is needed.
+func (s *Service) revertStop(ctx context.Context, id uuid.UUID, pubErr error) {
 	_, err := s.pool.Exec(ctx,
 		`UPDATE sessions
-		 SET status = $2, stopped_at = NULL, updated_at = now()
+		 SET status = 'running', stopped_at = NULL, updated_at = now()
 		 WHERE id = $1 AND status = 'stopped'`,
-		id, prevStatus,
+		id,
 	)
 	if err != nil {
 		slog.Error("session stop rollback failed",
-			"error", err, "publish_error", pubErr,
-			"session_id", id, "prev_status", prevStatus)
+			"error", err, "publish_error", pubErr, "session_id", id)
 	}
 }
 
