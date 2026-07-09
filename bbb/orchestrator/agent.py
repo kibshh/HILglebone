@@ -199,9 +199,39 @@ class Agent:
         log.info("shutdown signal received", extra={"signal": received})
 
     async def _shutdown(self) -> None:
-        """Reverse startup order. Each teardown is independent."""
-        # CommandBridge and OtaBridge have no explicit close — their
-        # subscriptions are unsubscribed by NatsClient.close() below.
+        """Graceful teardown, roughly the reverse of startup.
+
+        Ordering matters here:
+
+          1. Drain the bridges — refuse new cloud messages and wait for
+             any in-flight handler to finish. Handlers still need to write
+             their ACK forwards back to NATS, so the NATS connection must
+             remain open during this phase.
+          2. Heartbeat.stop() — cancels the periodic task, then publishes
+             one final OFFLINE StatusEnvelope so the backend sees us go
+             down before its last_seen_at staleness check would fire.
+          3. Close NATS — unsubscribes any leftover consumers and drains
+             the connection.
+          4. Close STM — do this last so any RSP_ACK waiter that a
+             draining handler was still awaiting has a chance to resolve
+             (StmLink.close() cancels the reader and fails pending ACKs).
+
+        Each step is independently guarded so a failure in one doesn't
+        strand a subsequent component open.
+        """
+        if self._command_bridge is not None:
+            try:
+                await self._command_bridge.drain()
+            except Exception:
+                log.exception("command bridge drain failed")
+            self._command_bridge = None
+
+        if self._ota_bridge is not None:
+            try:
+                await self._ota_bridge.drain()
+            except Exception:
+                log.exception("ota bridge drain failed")
+            self._ota_bridge = None
 
         if self._heartbeat is not None:
             try:

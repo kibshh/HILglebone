@@ -20,6 +20,7 @@ message arrives here it's for us by construction.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from nats.js.api import DeliverPolicy
@@ -60,6 +61,15 @@ class CommandBridge:
         self._state = state
         self._response_bridge = response_bridge
 
+        # Graceful-shutdown plumbing. drain() sets _shutting_down so new
+        # messages are nak'd (JetStream redelivers to us on next boot), and
+        # blocks on _idle until every in-flight handler has drained. asyncio
+        # is single-threaded so the counter + Event pair races nothing.
+        self._shutting_down: bool = False
+        self._inflight: int = 0
+        self._idle: asyncio.Event = asyncio.Event()
+        self._idle.set()
+
     async def open(self) -> None:
         """Attach the NATS subscription.
 
@@ -84,9 +94,46 @@ class CommandBridge:
             extra={"subject": subject, "device_id": self._state.device_id},
         )
 
+    async def drain(self, timeout_s: float = 15.0) -> None:
+        """Stop accepting new commands and wait for in-flight ones to finish.
+
+        Called during graceful shutdown BEFORE NATS closes, so ack-forwarding
+        publishes issued by in-flight handlers still land on the broker. New
+        messages arriving after drain() begins are nak'd so JetStream
+        redelivers them (to us on next boot — the subscription is per-device).
+        """
+        self._shutting_down = True
+        if self._inflight == 0:
+            return
+        log.info("command bridge draining", extra={"in_flight": self._inflight})
+        try:
+            await asyncio.wait_for(self._idle.wait(), timeout_s)
+        except asyncio.TimeoutError:
+            log.warning(
+                "command bridge drain timeout; leaving handlers running",
+                extra={"still_in_flight": self._inflight, "timeout_s": timeout_s},
+            )
+
     # ── NATS handler ───────────────────────────────────────────────
 
     async def _on_message(self, msg) -> None:  # noqa: ANN001  (NATS Msg)
+        if self._shutting_down:
+            try:
+                await msg.nak()
+            except Exception:
+                log.exception("nak during shutdown failed")
+            return
+
+        self._inflight += 1
+        self._idle.clear()
+        try:
+            await self._dispatch(msg)
+        finally:
+            self._inflight -= 1
+            if self._inflight == 0:
+                self._idle.set()
+
+    async def _dispatch(self, msg) -> None:  # noqa: ANN001  (NATS Msg)
         try:
             env = command_pb2.CommandEnvelope.FromString(msg.data)
         except Exception:
