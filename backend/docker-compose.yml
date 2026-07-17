@@ -1,9 +1,18 @@
-# Local-dev stack: `docker compose up` gives you a fully wired backend on
-# localhost:${BACKEND_HOST_PORT:-8080}. The four data services (Postgres,
-# NATS, MinIO, backend) are supported by three one-shot init containers
-# that apply schema migrations, create JetStream streams, and create the
-# firmware bucket. depends_on with service_completed_successfully ensures
-# the backend never starts before its dependencies are ready.
+# ══════════════════════════════════════════════════════════════════
+#   LOCAL DEVELOPMENT STACK
+# ══════════════════════════════════════════════════════════════════
+#
+#   docker compose up --build
+#
+# Backend is built from Dockerfile's `dev` target (alpine + shell), data
+# services expose their ports on localhost for direct inspection, and
+# every credential has a dev-safe default.
+#
+# For production, layer docker-compose.prod.yml on top:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# That override swaps the backend to the `prod` target, requires real
+# secrets, and strips the dev-only host port exposures. See that file's
+# header for details.
 #
 # Copy .env.example → .env before first use.
 
@@ -74,8 +83,10 @@ services:
   # ── One-shot init containers ────────────────────────────────────────
 
   postgres-migrate:
-    # Applies backend/migrations/*.up.sql at startup and exits.
-    # golang-migrate is the same CLI used in CI, so dev and CI stay in sync.
+    # Applies backend/migrations/*.up.sql at startup and exits. Uses
+    # golang-migrate — the standard Go migrations tool — so the same CLI
+    # can be used from the host (installed by scripts/dev-bootstrap.sh)
+    # and later from a deploy pipeline / systemd oneshot in production.
     image: migrate/migrate:v4.17.0
     container_name: hilglebone-migrate
     depends_on:
@@ -133,6 +144,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: dev
     container_name: hilglebone-backend
     depends_on:
       postgres-migrate:
@@ -147,6 +159,14 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-hilglebone}:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/${POSTGRES_DB:-hilglebone}?sslmode=disable
       NATS_URL: nats://nats:4222
       MINIO_ENDPOINT: minio:9000
+      # Public endpoint baked into presigned URLs the BBB fetches. The
+      # BBB is never on the compose network — it's either a physical
+      # BeagleBone on the LAN or a smoke-test Python process on the dev
+      # host. In both cases it reaches MinIO through the port compose
+      # publishes to the host (9000). `localhost:9000` works for the
+      # host-process case; for a real BBB on the LAN, override to
+      # `<dev-host-lan-ip>:9000` in .env.
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-localhost:9000}
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       MINIO_BUCKET: ${MINIO_BUCKET:-firmware}

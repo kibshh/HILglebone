@@ -5,6 +5,10 @@
 
 set -euo pipefail
 
+# NATS_URL is set by docker-compose (nats-init service) to the in-network
+# hostname `nats:4222`. When running this script directly on the host
+# — outside compose — nothing sets it, so we fall back to localhost:4222
+# (the port compose publishes to the host).
 NATS_URL="${NATS_URL:-nats://localhost:4222}"
 
 echo "Connecting to ${NATS_URL}..."

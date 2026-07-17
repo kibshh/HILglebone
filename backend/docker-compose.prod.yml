@@ -1,0 +1,90 @@
+# ══════════════════════════════════════════════════════════════════
+#   ON-PREM / DEDICATED-CUSTOMER PRODUCTION STACK
+# ══════════════════════════════════════════════════════════════════
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# This is NOT the path for the public SaaS deployment. HILglebone's SaaS
+# runs on Kubernetes with managed data services (Postgres HA, S3, NATS
+# cluster). See ROADMAP.md → "Phase 12: SaaS-Scale Production" for that
+# track.
+#
+# Use this compose file when a single customer or a single organisation
+# takes their own dedicated HILglebone instance:
+#
+#   * Enterprise plan customer with a reserved BBB pool running on
+#     hardware they own (their DC, their office).
+#   * On-prem appliance we ship as a single-node product.
+#   * A staging box for the SaaS team that mirrors prod behaviour more
+#     closely than docker-compose.yml alone.
+#
+# It also doubles as documentation of the env-var contract the `prod`
+# Dockerfile image expects — useful reference when writing the Helm chart
+# / Kubernetes manifests for the SaaS deployment.
+#
+# What it does vs. the dev compose:
+#   * Backend built from the `prod` Dockerfile target (distroless nonroot).
+#   * Refuses to start unless every credential + WS origin is provided —
+#     no dev-safe defaults leak into a production deployment.
+#   * Removes dev-only host port exposures (Postgres 5432, MinIO console
+#     9001, NATS monitoring 8222). Those services stay reachable inside
+#     the compose network; only the backend faces the outside world, and
+#     it's expected to sit behind an ingress / reverse proxy that
+#     terminates TLS.
+#
+# Copy .env.prod.example → .env before first use.
+
+services:
+  postgres:
+    # Data services stay on the compose network only; no host port.
+    ports: !reset []
+    restart: always
+
+  nats:
+    ports:
+      # Client port only — keep the monitoring UI (8222) internal.
+      - "4222:4222"
+    restart: always
+
+  minio:
+    ports:
+      # S3 API only — the console (9001) shouldn't be publicly reachable.
+      - "9000:9000"
+    environment:
+      # No `:-default` — start fails if the operator forgot to set these.
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?required in prod}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?required in prod}
+    restart: always
+
+  minio-init:
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?required in prod}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?required in prod}
+      MINIO_BUCKET: ${MINIO_BUCKET:?required in prod}
+
+  backend:
+    build:
+      target: prod
+    environment:
+      APP_ENV: production
+      BACKEND_ADDR: ":8080"
+      DATABASE_URL: postgres://${POSTGRES_USER:?required in prod}:${POSTGRES_PASSWORD:?required in prod}@postgres:5432/${POSTGRES_DB:?required in prod}?sslmode=disable
+      NATS_URL: nats://nats:4222
+      MINIO_ENDPOINT: minio:9000
+      # Public MinIO hostname the BBB will hit. Must resolve from the
+      # BBB's network and terminate TLS at a reverse proxy (or MinIO
+      # itself with real certs). Example: firmware.hilglebone.com.
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:?required in prod}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?required in prod}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?required in prod}
+      MINIO_BUCKET: ${MINIO_BUCKET:?required in prod}
+      # In-cluster MinIO is reached over the compose network (plaintext).
+      # If MinIO is replaced with managed S3, flip to "true".
+      MINIO_USE_SSL: "false"
+      # Public endpoint faces the internet — TLS is not optional here.
+      MINIO_PUBLIC_USE_SSL: "true"
+      # Comma-separated list of exact origins (or wildcard patterns) the
+      # WebSocket upgrader accepts. Config refuses to start without this
+      # in production.
+      WS_ALLOWED_ORIGINS: ${WS_ALLOWED_ORIGINS:?required in prod}
+    restart: always
