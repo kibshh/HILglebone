@@ -1,0 +1,24 @@
+# Everything except what the Go build actually needs.
+# Keeps the build context small (faster COPY, less cache invalidation).
+
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+
+# Build artefacts / caches that don't belong in the image.
+gen/*.pb.go.tmp
+*.test
+*.out
+coverage.*
+
+# Local infra state that's not part of the source.
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# Editor / OS junk.
+.vscode
+.idea
+.DS_Store

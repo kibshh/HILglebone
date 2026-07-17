@@ -1,4 +1,44 @@
+# ══════════════════════════════════════════════════════════════════
+#   LOCAL DEVELOPMENT STACK
+# ══════════════════════════════════════════════════════════════════
+#
+#   docker compose up --build
+#
+# Backend is built from Dockerfile's `dev` target (alpine + shell), data
+# services expose their ports on localhost for direct inspection, and
+# every credential has a dev-safe default.
+#
+# For production, layer docker-compose.prod.yml on top:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# That override swaps the backend to the `prod` target, requires real
+# secrets, and strips the dev-only host port exposures. See that file's
+# header for details.
+#
+# Copy .env.example → .env before first use.
+
 services:
+  # ── Data services ───────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: hilglebone-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hilglebone}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-hilglebone}
+    # Exposed on host for convenience (psql, TablePlus etc.); not required
+    # by the backend — that talks to it over the compose network.
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hilglebone} -d ${POSTGRES_DB:-hilglebone}"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+
   nats:
     image: nats:2.10-alpine
     container_name: hilglebone-nats
@@ -9,6 +49,13 @@ services:
       - ./infra/nats/nats.conf:/etc/nats/nats.conf:ro
       - nats_data:/data/jetstream
     command: ["-c", "/etc/nats/nats.conf"]
+    healthcheck:
+      # /healthz on the monitoring port returns 200 iff the server + JetStream
+      # are up. wget is bundled with the alpine base image.
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz || exit 1"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
     restart: unless-stopped
 
   minio:
@@ -18,18 +65,119 @@ services:
       - "9000:9000"   # S3 API
       - "9001:9001"   # Console UI (http://localhost:9001)
     environment:
-      # DEV CREDENTIALS — do not use in production. Override via env vars or a
-      # separate compose file (e.g. docker-compose.prod.yml + a secret store)
-      # before any deployment that is reachable beyond localhost.
+      # DEV CREDENTIALS — do not use in production. Override via env vars or
+      # a separate compose file (e.g. docker-compose.prod.yml + a secret
+      # store) before any deployment reachable beyond localhost.
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     volumes:
       - minio_data:/data
     command: ["server", "/data", "--console-address", ":9001"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
     restart: unless-stopped
 
-  # postgresql will be added later
+  # ── One-shot init containers ────────────────────────────────────────
+
+  postgres-migrate:
+    # Applies backend/migrations/*.up.sql at startup and exits. Uses
+    # golang-migrate — the standard Go migrations tool — so the same CLI
+    # can be used from the host (installed by scripts/dev-bootstrap.sh)
+    # and later from a deploy pipeline / systemd oneshot in production.
+    image: migrate/migrate:v4.17.0
+    container_name: hilglebone-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/migrations:ro
+    entrypoint:
+      - migrate
+      - -path=/migrations
+      - -database
+      - postgres://${POSTGRES_USER:-hilglebone}:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/${POSTGRES_DB:-hilglebone}?sslmode=disable
+      - up
+    restart: "no"
+
+  nats-init:
+    # Reuses infra/nats/setup-streams.sh — the same script we run against a
+    # remote NATS in staging/prod. nats-box has bash + the `nats` CLI.
+    image: natsio/nats-box:latest
+    container_name: hilglebone-nats-init
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      NATS_URL: nats://nats:4222
+    volumes:
+      - ./infra/nats/setup-streams.sh:/setup-streams.sh:ro
+    entrypoint: ["bash", "/setup-streams.sh"]
+    restart: "no"
+
+  minio-init:
+    # Creates the firmware bucket. Idempotent: `mc mb -p` treats "already
+    # exists" as success, so re-runs are a no-op.
+    image: minio/mc:latest
+    container_name: hilglebone-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-firmware}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        mc mb -p "local/$${MINIO_BUCKET}"
+    restart: "no"
+
+  # ── Backend ─────────────────────────────────────────────────────────
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    container_name: hilglebone-backend
+    depends_on:
+      postgres-migrate:
+        condition: service_completed_successfully
+      nats-init:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      APP_ENV: development
+      BACKEND_ADDR: ":8080"
+      DATABASE_URL: postgres://${POSTGRES_USER:-hilglebone}:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/${POSTGRES_DB:-hilglebone}?sslmode=disable
+      NATS_URL: nats://nats:4222
+      MINIO_ENDPOINT: minio:9000
+      # Public endpoint baked into presigned URLs the BBB fetches. The
+      # BBB is never on the compose network — it's either a physical
+      # BeagleBone on the LAN or a smoke-test Python process on the dev
+      # host. In both cases it reaches MinIO through the port compose
+      # publishes to the host (9000). `localhost:9000` works for the
+      # host-process case; for a real BBB on the LAN, override to
+      # `<dev-host-lan-ip>:9000` in .env.
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-localhost:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-firmware}
+      MINIO_USE_SSL: "false"
+      # WS_ALLOWED_ORIGINS is only required in production; dev-mode config
+      # treats empty as "any origin allowed."
+    ports:
+      - "${BACKEND_HOST_PORT:-8080}:8080"
+    restart: unless-stopped
 
 volumes:
+  postgres_data:
   nats_data:
   minio_data:
