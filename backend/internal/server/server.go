@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/minio/minio-go/v7"
 
 	"github.com/kibshh/HILglebone/backend/internal/bus"
 	"github.com/kibshh/HILglebone/backend/internal/devices"
@@ -25,7 +24,7 @@ func New(
 	pool *pgxpool.Pool,
 	publisher *natspub.Publisher,
 	b *bus.Bus,
-	mc *minio.Client,
+	storage *firmware.Clients,
 	firmwareBucket string,
 	wsAllowedOrigins []string,
 ) *http.Server {
@@ -37,7 +36,7 @@ func New(
 
 	wsHandler := ws.NewHandler(pool, b, wsAllowedOrigins)
 
-	firmwareSvc := firmware.NewService(pool, mc, firmwareBucket)
+	firmwareSvc := firmware.NewService(pool, storage, firmwareBucket)
 	firmwareHandler := firmware.NewHandler(firmwareSvc)
 
 	mux := http.NewServeMux()

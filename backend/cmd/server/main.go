@@ -58,19 +58,21 @@ func main() {
 	}
 	defer subscriber.Close()
 
-	mc, err := firmware.OpenStorage(ctx, firmware.StorageConfig{
-		Endpoint:  cfg.MinIOEndpoint,
-		AccessKey: cfg.MinIOAccessKey,
-		SecretKey: cfg.MinIOSecretKey,
-		Bucket:    cfg.MinIOBucket,
-		UseSSL:    cfg.MinIOUseSSL,
+	storage, err := firmware.OpenStorage(ctx, firmware.StorageConfig{
+		Endpoint:       cfg.MinIOEndpoint,
+		PublicEndpoint: cfg.MinIOPublicEndpoint,
+		AccessKey:      cfg.MinIOAccessKey,
+		SecretKey:      cfg.MinIOSecretKey,
+		Bucket:         cfg.MinIOBucket,
+		UseSSL:         cfg.MinIOUseSSL,
+		PublicUseSSL:   cfg.MinIOPublicUseSSL,
 	})
 	if err != nil {
 		slog.Error("minio open failed", "error", err)
 		os.Exit(1)
 	}
 
-	srv := server.New(cfg.BackendAddr, pool, publisher, eventBus, mc, cfg.MinIOBucket, cfg.WSAllowedOrigins)
+	srv := server.New(cfg.BackendAddr, pool, publisher, eventBus, storage, cfg.MinIOBucket, cfg.WSAllowedOrigins)
 
 	serverErr := make(chan error, 1)
 	go func() {

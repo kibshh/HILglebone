@@ -30,11 +30,28 @@ type Config struct {
 	DatabaseURL string
 	NATSURL     string
 
-	MinIOEndpoint  string
-	MinIOAccessKey string
-	MinIOSecretKey string
-	MinIOBucket    string
-	MinIOUseSSL    bool
+	// Internal endpoint the backend uses for admin ops (bucket create,
+	// PutObject, RemoveObject).
+	MinIOEndpoint string
+	// Public endpoint baked into presigned URLs handed to the BBB. Must
+	// be resolvable from wherever the BBB runs — the BBB is always
+	// off-network (real hardware on the LAN or a host-side test process),
+	// so this is never `minio:9000`. In dev compose it's `localhost:9000`
+	// (or the dev host's LAN IP for a real BBB); in prod it's the public
+	// hostname the fleet dials.
+	//
+	// Falls back to MinIOEndpoint when unset only so single-process test
+	// setups (backend + MinIO both on localhost, no compose) don't need
+	// to specify two identical values. Compose-based configs should set
+	// it explicitly.
+	MinIOPublicEndpoint string
+	MinIOAccessKey      string
+	MinIOSecretKey      string
+	MinIOBucket         string
+	MinIOUseSSL         bool
+	// TLS flag for the public endpoint. Falls back to MinIOUseSSL when
+	// unset — the same rule as MinIOPublicEndpoint above.
+	MinIOPublicUseSSL bool
 
 	// WSAllowedOrigins is the list of Origin patterns the WS upgrader
 	// accepts. Empty means "any origin" (only allowed in development).
@@ -54,14 +71,20 @@ func Load() (*Config, error) {
 	}
 
 	cfg := &Config{
-		Mode:           mode,
-		BackendAddr:    os.Getenv("BACKEND_ADDR"),
-		DatabaseURL:    os.Getenv("DATABASE_URL"),
-		NATSURL:        os.Getenv("NATS_URL"),
-		MinIOEndpoint:  os.Getenv("MINIO_ENDPOINT"),
-		MinIOAccessKey: os.Getenv("MINIO_ACCESS_KEY"),
-		MinIOSecretKey: os.Getenv("MINIO_SECRET_KEY"),
-		MinIOBucket:    os.Getenv("MINIO_BUCKET"),
+		Mode:                mode,
+		BackendAddr:         os.Getenv("BACKEND_ADDR"),
+		DatabaseURL:         os.Getenv("DATABASE_URL"),
+		NATSURL:             os.Getenv("NATS_URL"),
+		MinIOEndpoint:       os.Getenv("MINIO_ENDPOINT"),
+		MinIOPublicEndpoint: os.Getenv("MINIO_PUBLIC_ENDPOINT"),
+		MinIOAccessKey:      os.Getenv("MINIO_ACCESS_KEY"),
+		MinIOSecretKey:      os.Getenv("MINIO_SECRET_KEY"),
+		MinIOBucket:         os.Getenv("MINIO_BUCKET"),
+	}
+	// Public endpoint defaults to the internal one — pure-compose dev
+	// works with a single value; on-prem / prod sets both explicitly.
+	if cfg.MinIOPublicEndpoint == "" {
+		cfg.MinIOPublicEndpoint = cfg.MinIOEndpoint
 	}
 
 	if missing := cfg.requiredMissing(); len(missing) > 0 {
@@ -121,6 +144,8 @@ func (c *Config) requiredMissing() []string {
 }
 
 // loadMinIOSSL enforces TLS in production; allows explicit opt-out in dev.
+// Loads MinIOUseSSL (internal endpoint TLS) and MinIOPublicUseSSL (public
+// endpoint TLS); the latter defaults to the former.
 func (c *Config) loadMinIOSSL() error {
 	switch os.Getenv("MINIO_USE_SSL") {
 	case "true":
@@ -139,6 +164,21 @@ func (c *Config) loadMinIOSSL() error {
 	default:
 		return fmt.Errorf("MINIO_USE_SSL must be \"true\" or \"false\", got %q",
 			os.Getenv("MINIO_USE_SSL"))
+	}
+
+	// MINIO_PUBLIC_USE_SSL: same accepted values as MINIO_USE_SSL. Unset
+	// means "same as internal" — matches how MinIOPublicEndpoint defaults
+	// to MinIOEndpoint when the split isn't needed.
+	switch os.Getenv("MINIO_PUBLIC_USE_SSL") {
+	case "true":
+		c.MinIOPublicUseSSL = true
+	case "false":
+		c.MinIOPublicUseSSL = false
+	case "":
+		c.MinIOPublicUseSSL = c.MinIOUseSSL
+	default:
+		return fmt.Errorf("MINIO_PUBLIC_USE_SSL must be \"true\" or \"false\", got %q",
+			os.Getenv("MINIO_PUBLIC_USE_SSL"))
 	}
 	return nil
 }
@@ -166,4 +206,3 @@ func defaultLogLevel(mode Mode) slog.Level {
 	}
 	return slog.LevelInfo
 }
-
