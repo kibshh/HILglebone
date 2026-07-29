@@ -27,13 +27,19 @@ var (
 )
 
 type Service struct {
-	pool   *pgxpool.Pool
-	mc     *minio.Client
-	bucket string
+	pool    *pgxpool.Pool
+	admin   *minio.Client // internal endpoint: PUT / RemoveObject
+	presign *minio.Client // public endpoint: PresignedGetObject
+	bucket  string
 }
 
-func NewService(pool *pgxpool.Pool, mc *minio.Client, bucket string) *Service {
-	return &Service{pool: pool, mc: mc, bucket: bucket}
+func NewService(pool *pgxpool.Pool, clients *Clients, bucket string) *Service {
+	return &Service{
+		pool:    pool,
+		admin:   clients.Admin,
+		presign: clients.Presign,
+		bucket:  bucket,
+	}
 }
 
 type UploadRequest struct {
@@ -71,7 +77,7 @@ func (s *Service) Upload(ctx context.Context, req UploadRequest) (*UploadResult,
 	hasher := sha256.New()
 	reader := io.TeeReader(req.Data, hasher)
 
-	if _, err := s.mc.PutObject(ctx, s.bucket, objectKey,
+	if _, err := s.admin.PutObject(ctx, s.bucket, objectKey,
 		reader, req.Size,
 		minio.PutObjectOptions{ContentType: "application/octet-stream"},
 	); err != nil {
@@ -87,7 +93,7 @@ func (s *Service) Upload(ctx context.Context, req UploadRequest) (*UploadResult,
 		id, req.UserID, req.DUTDeviceID, req.Filename, req.Size, sha, storageURL,
 	); err != nil {
 		// Clean up the orphan MinIO object before returning. Best-effort.
-		if rmErr := s.mc.RemoveObject(ctx, s.bucket, objectKey, minio.RemoveObjectOptions{}); rmErr != nil {
+		if rmErr := s.admin.RemoveObject(ctx, s.bucket, objectKey, minio.RemoveObjectOptions{}); rmErr != nil {
 			slog.Error("firmware orphan cleanup failed",
 				"error", rmErr, "bucket", s.bucket, "key", objectKey)
 		}
@@ -98,7 +104,7 @@ func (s *Service) Upload(ctx context.Context, req UploadRequest) (*UploadResult,
 		return nil, fmt.Errorf("insert firmware: %w", err)
 	}
 
-	presigned, err := s.mc.PresignedGetObject(ctx, s.bucket, objectKey, presignedURLDuration, nil)
+	presigned, err := s.presign.PresignedGetObject(ctx, s.bucket, objectKey, presignedURLDuration, nil)
 	if err != nil {
 		return nil, fmt.Errorf("presign: %w", err)
 	}
