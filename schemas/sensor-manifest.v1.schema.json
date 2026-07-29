@@ -1,0 +1,265 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hilglebone.com/schemas/sensor-manifest.v1.schema.json",
+  "title": "HILglebone sensor manifest (v1)",
+  "description": "Machine-readable schema for HILglebone sensor manifests. Validates a manifest's identity and its user-tunable parameters; the wire layout lives in config-idl (a parameter names the IDL field it drives via `field`). See docs/backend/sensors/manifest-schema.md and config-idl.md. Cross-field rules JSON Schema can't express (default within range, enum default in values, each `field` resolving to a `user` field of the sensor's config-idl) are enforced by the import-time code validator.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "name",
+    "version",
+    "protocol"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Which schema revision this manifest targets."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+      "description": "Stable kebab-case identifier. Primary key; never change after import."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Human-readable display name."
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Monotonic revision; bump on any breaking change."
+    },
+    "description": {
+      "type": "string",
+      "description": "Optional long-form description; rendered as help copy."
+    },
+    "protocol": {
+      "type": "string",
+      "enum": ["I2C", "SPI", "DIGITAL_OUT", "DIGITAL_IN", "DAC", "PWM", "FREQ", "ONEWIRE", "CAN"],
+      "description": "Wire protocol; from the ProtocolId proto enum minus the PROTOCOL_ID_ prefix (the STM32 mirrors these as PROTO_ID_*, same values). The UNSPECIFIED/NONE (0) sentinel is excluded — a manifest must name a real protocol."
+    },
+    "parameters": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Typed user-tunable knobs (number/enum/boolean), for protocols whose user inputs are scalars (PWM, DAC, ...). I2C sensors express user-settable values through `registers` marked `user: true` instead.",
+      "items": { "$ref": "#/$defs/parameter" }
+    },
+    "i2c": { "$ref": "#/$defs/i2cConfig" },
+    "registers": {
+      "type": "array",
+      "minItems": 1,
+      "description": "I2C register map — sensor-specific; defines the simulated device. Each register's default byte, plus any `user: true` overrides, compiles to the CMD_SETUP_SENSOR preset block.",
+      "items": { "$ref": "#/$defs/register" }
+    },
+    "digital_out": { "$ref": "#/$defs/digitalOutConfig" },
+    "spi": { "$ref": "#/$defs/spiSlaveConfig" }
+  },
+  "allOf": [
+    {
+      "if": { "required": ["protocol"], "properties": { "protocol": { "const": "I2C" } } },
+      "then": { "required": ["i2c", "registers"] }
+    },
+    {
+      "if": { "required": ["protocol"], "properties": { "protocol": { "const": "DIGITAL_OUT" } } },
+      "then": { "required": ["digital_out"] }
+    },
+    {
+      "if": { "required": ["protocol"], "properties": { "protocol": { "const": "SPI" } } },
+      "then": { "required": ["spi"] }
+    },
+    {
+      "comment": "Streaming (reg_addr_width 0) registers are address-less; addressed (1/2) registers require addr.",
+      "if": {
+        "required": ["i2c"],
+        "properties": { "i2c": { "required": ["reg_addr_width"], "properties": { "reg_addr_width": { "const": 0 } } } }
+      },
+      "then": {
+        "properties": { "registers": { "items": { "not": { "required": ["addr"] } } } }
+      },
+      "else": {
+        "properties": { "registers": { "items": { "required": ["addr"] } } }
+      }
+    }
+  ],
+
+  "$defs": {
+    "paramName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$",
+      "description": "snake_case, unique within the parameters array of a manifest."
+    },
+
+    "enumValue": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+    },
+
+    "fieldRef": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$",
+      "description": "Name of the config-idl `user` field this parameter drives (e.g. `freq_hz`). The config-idl owns the wire encoding (offset/width/scale); the manifest only names which field it feeds. Cross-checked against the IDL at import time."
+    },
+
+    "i2cConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["clock_hz", "address_mode", "addresses", "reg_addr_width"],
+      "description": "I2C sensor-layer characteristics (sensor semantics). NOTE: clock_hz is a single rated value today; the clock_min_hz/clock_max_hz split is deferred.",
+      "properties": {
+        "clock_hz": { "type": "integer", "const": 400000, "description": "Rated I2C bus clock (Hz). For now this MUST equal the STM32 I2C slave maximum (F401 Fast-mode = 400000, firmware I2C_SENSOR_CLOCK_MAX_HZ): we only onboard sensors whose rated frequency matches the board's, so the passive out-of-spec handling suffices. Sensors rated below the board max need active clock enforcement, which is deferred. When the board capability map + import validator land, replace this hard-coded const with a check against the target rig's I2C max." },
+        "address_mode": { "type": "string", "enum": ["7bit", "10bit"] },
+        "addresses": {
+          "type": "array",
+          "description": "Strap-selectable address(es); the session picks which this instance uses. Entry 1 = primary, entry 2 = secondary. The import validator checks each fits address_mode.",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 0 }
+        },
+        "reg_addr_width": { "type": "integer", "enum": [0, 1, 2], "description": "Register-address width in bytes: 0 = none (streaming sensor — the DUT reads bytes with no register offset), 1 = 8-bit, 2 = 16-bit. Matches firmware I2C_REG_ADDR_WIDTH_NONE/8/16." },
+        "auto_inc_mode": { "type": "string", "enum": ["none", "on_read", "on_write", "both"], "description": "Register-pointer auto-increment (firmware I2C_AUTO_INC_MODE_* 0..3). Default none." },
+        "flags": { "$ref": "#/$defs/i2cFlags" },
+        "response_delay_us": { "type": "integer", "minimum": 0, "description": "Optional pre-data stretch after address match, µs." },
+        "clock_stretch_max_us": { "type": "integer", "minimum": 0, "description": "Optional upper bound on clock stretching, µs. 0 = none." }
+      }
+    },
+
+    "i2cFlags": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "I2C behaviour flags — packed to the firmware u8 `flags` bitfield (bit 7 reserved, always 0). All default false.",
+      "properties": {
+        "general_call_enable": { "type": "boolean", "description": "Respond to the general-call address 0x00 (bit 0)." },
+        "smbus_mode": { "type": "boolean", "description": "SMBus semantics: timeouts, ACK rules (bit 1)." },
+        "pec_required": { "type": "boolean", "description": "Require PEC on SMBus block transactions; only meaningful with smbus_mode (bit 2)." },
+        "auto_inc_wrap": { "type": "boolean", "description": "Auto-increment wraps at register_count-1; else it saturates (bit 3)." },
+        "dut_writes_allowed": { "type": "boolean", "description": "Accept DUT register writes and update the map; else NACK them (bit 4)." },
+        "internal_pullups": { "type": "boolean", "description": "Enable STM32 internal SDA/SCL pull-ups — lab only, too weak for reliable fast-mode (bit 5)." },
+        "clock_stretch_enable": { "type": "boolean", "description": "Allow clock stretching at all; 0 forces instantaneous responses, overriding response_delay_us / clock_stretch_max_us (bit 6)." }
+      }
+    },
+
+    "register": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["default"],
+      "description": "One 8-bit register/stream byte. `addr` is required when reg_addr_width is 1 or 2 (addressed) and forbidden when it is 0 (streaming — array order is the stream order); this is enforced by the reg_addr_width conditional. Multi-byte quantities are consecutive entries. The import validator checks addr fits reg_addr_width and addresses are unique.",
+      "properties": {
+        "addr": { "type": "integer", "minimum": 0, "description": "Register address (addressed sensors only)." },
+        "default": { "type": "integer", "minimum": 0, "maximum": 255, "description": "Byte value the sensor holds at reset." },
+        "user": { "type": "boolean", "description": "If true, the session can override this register at runtime (flows through the preset mechanism). Default false." },
+        "label": { "type": "string", "description": "UI label shown when the register is user-settable." }
+      }
+    },
+
+    "digitalOutConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["output_type", "speed", "pull"],
+      "description": "Digital-output sensor-layer electrical characteristics (sensor semantics). Named values map to fixed firmware/GPIO encodings at import time.",
+      "properties": {
+        "output_type": { "type": "string", "enum": ["push_pull", "open_drain"] },
+        "speed": { "type": "string", "enum": ["low", "medium", "high", "very_high"], "description": "Slew rate / drive strength (GPIO OSPEEDR 0..3)." },
+        "pull": { "type": "string", "enum": ["none", "pull_up", "pull_down"], "description": "Internal pull configuration (GPIO PUPDR 0..2)." }
+      }
+    },
+
+    "spiSlaveConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["spi_mode"],
+      "description": "SPI-slave sensor-layer characteristics (sensor semantics). The STM32 emulates the slave; the DUT is the master and drives SCK.",
+      "properties": {
+        "spi_mode": { "type": "integer", "enum": [0, 1, 2, 3], "description": "SPI mode 0-3 (CPOL/CPHA); must match the DUT master." },
+        "default_response": {
+          "type": "array",
+          "description": "Optional default bytes the slave returns until the session overrides them via CMD_SET_OUTPUT.",
+          "items": { "type": "integer", "minimum": 0, "maximum": 255 }
+        }
+      }
+    },
+
+    "ui": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional overrides to the type-driven UI defaults. Reach for these rarely.",
+      "properties": {
+        "control": {
+          "type": "string",
+          "enum": ["slider", "dropdown", "toggle", "number", "text"]
+        },
+        "label": { "type": "string" }
+      }
+    },
+
+    "parameter": {
+      "description": "Discriminated on `type`. Exactly one of number / enum / boolean.",
+      "oneOf": [
+        { "$ref": "#/$defs/paramNumber" },
+        { "$ref": "#/$defs/paramEnum" },
+        { "$ref": "#/$defs/paramBoolean" }
+      ]
+    },
+
+    "paramNumber": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type", "label", "min", "max", "step", "default", "field"],
+      "properties": {
+        "name": { "$ref": "#/$defs/paramName" },
+        "type": { "const": "number" },
+        "label": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "step": { "type": "number", "exclusiveMinimum": 0 },
+        "default": { "type": "number" },
+        "unit": { "type": "string" },
+        "ui": { "$ref": "#/$defs/ui" },
+        "field": { "$ref": "#/$defs/fieldRef" }
+      }
+    },
+
+    "paramEnum": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type", "label", "values", "default", "field"],
+      "properties": {
+        "name": { "$ref": "#/$defs/paramName" },
+        "type": { "const": "enum" },
+        "label": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "values": {
+          "type": "object",
+          "description": "Map from each allowed value name (snake_case) to its wire integer. This value→int mapping is sensor semantics and stays in the manifest; the config-idl `field` owns the byte width/offset.",
+          "minProperties": 2,
+          "propertyNames": { "$ref": "#/$defs/enumValue" },
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "default": { "$ref": "#/$defs/enumValue" },
+        "ui": { "$ref": "#/$defs/ui" },
+        "field": { "$ref": "#/$defs/fieldRef" }
+      }
+    },
+
+    "paramBoolean": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type", "label", "default", "field"],
+      "properties": {
+        "name": { "$ref": "#/$defs/paramName" },
+        "type": { "const": "boolean" },
+        "label": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "default": { "type": "boolean" },
+        "ui": { "$ref": "#/$defs/ui" },
+        "field": { "$ref": "#/$defs/fieldRef" }
+      }
+    }
+  }
+}
